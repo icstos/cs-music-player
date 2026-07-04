@@ -1,2 +1,3 @@
 flet>=0.85.3
-flet-audio>=0.1.0
+pygame>=2.6
+mutagen>=1.47
