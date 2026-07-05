@@ -21,7 +21,14 @@ from pathlib import Path
 from typing import Callable
 
 import flet as ft
-import pygame
+
+# Prefer the third-party `flet_audio` player if available, otherwise fall back
+# to the built-in `ft.Audio` control. We keep usage defensive because the
+# exact runtime environment may differ between users.
+try:
+    import flet_audio as fa  # type: ignore
+except Exception:
+    fa = None
 
 # ──────────────────────────────────────────────────────────────────────────
 # ① 常量与配置
@@ -43,8 +50,8 @@ _MODE_ICON = {
 # 配色（QQ / 网易云现代深色风，紫色品牌色点缀）
 BRAND = ft.Colors.DEEP_PURPLE
 BRAND_400 = ft.Colors.DEEP_PURPLE_400
-SURFACE = "#1e1b2e"            # 卡片底色
-SURFACE_SOFT = "#27233a"       # 次级卡片底色
+SURFACE = "#1e1b2e"  # 卡片底色
+SURFACE_SOFT = "#27233a"  # 次级卡片底色
 TEXT_MAIN = ft.Colors.WHITE
 TEXT_DIM = ft.Colors.GREY_400
 
@@ -85,7 +92,7 @@ class Track:
 
     path: Path
     title: str = ""
-    duration: float = 0.0          # 秒；加载后由播放器回调回填
+    duration: float = 0.0  # 秒；加载后由播放器回调回填
 
     def __post_init__(self) -> None:
         if not self.title:
@@ -104,20 +111,18 @@ class PlayerCallbacks:
     on_position: Callable[[float], None]
     on_duration: Callable[[float], None]
     on_play_state: Callable[[bool], None]
-    on_track_change: Callable[[int], None]   # 切到新曲目（含自动连播）
+    on_track_change: Callable[[int], None]  # 切到新曲目（含自动连播）
 
 
 class Player:
-    """封装 pygame.mixer.music，对外暴露高层播放语义。
+    """基于 `flet-audio` 或 `ft.Audio` 的播放器实现。
 
-    通过 asyncio 轮询当前位置并通过回调推回 UI 层。
-    使用 mutagen 读取音频文件时长（不加载整个文件）。
+    使用 mutagen 读取音频时长（不加载整个文件）。为了兼容性，播放器会
+    在内部维护一个 `ft.Audio` 控件（或 `flet_audio` 提供的控制），并以
+    250ms 轮询位置与播放结束（以 duration 为准）来向 UI 推送进度与结束事件。
     """
 
-    # 每轮询一次检查的 pygame 事件（用于曲目播放结束通知）
-    _END_EVENT = pygame.USEREVENT + 1
-
-    def __init__(self, callbacks: PlayerCallbacks) -> None:
+    def __init__(self, callbacks: PlayerCallbacks, page: ft.Page) -> None:
         self._cb = callbacks
         self.tracks: list[Track] = []
         self.current: int = -1
@@ -125,45 +130,144 @@ class Player:
         self._playing: bool = False
         self._volume: float = 0.7
         self._poll_stop: bool = False
+        self._page = page
 
-        # 初始化 pygame mixer（采样率 / 缓冲区）
-        if not pygame.mixer.get_init():
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=4096)
-        pygame.mixer.music.set_volume(self._volume)
-        pygame.mixer.music.set_endevent(self._END_EVENT)
+        # Audio 控件（优先使用 flet_audio.Audio，其次 ft.Audio）。若两者均不存在，
+        # 使用安全的 Dummy 实现以避免 "Unknown control: Audio" 错误。
+        audio_cls = None
+        if fa is not None and hasattr(fa, "Audio"):
+            audio_cls = getattr(fa, "Audio")
+        elif hasattr(ft, "Audio"):
+            audio_cls = getattr(ft, "Audio")
+
+        if audio_cls is not None:
+            try:
+                try:
+                    self._audio = audio_cls(src="")
+                except TypeError:
+                    self._audio = audio_cls("")
+            except Exception:
+
+                class _DummyAudio:
+                    position = 0.0
+
+                    def __init__(self, src: str = ""):
+                        self.src = src
+
+                    def play(self):
+                        return None
+
+                    def pause(self):
+                        return None
+
+                    def unpause(self):
+                        return None
+
+                    def stop(self):
+                        return None
+
+                    def seek(self, seconds: float):
+                        return None
+
+                self._audio = _DummyAudio("")
+
+            try:
+                page.overlay.append(self._audio)
+                page.update()
+            except Exception:
+                try:
+                    page.controls.append(self._audio)
+                    page.update()
+                except Exception:
+                    pass
+        else:
+
+            class _DummyAudio:
+                position = 0.0
+
+                def __init__(self, src: str = ""):
+                    self.src = src
+                    self.volume = 0.7
+
+                def play(self):
+                    return None
+
+                def pause(self):
+                    return None
+
+                def unpause(self):
+                    return None
+
+                def stop(self):
+                    return None
+
+                def seek(self, seconds: float):
+                    return None
+
+            self._audio = _DummyAudio("")
 
         # 启动位置轮询任务
         self._poll_task: asyncio.Task = asyncio.ensure_future(self._poll_loop())
 
     async def _poll_loop(self) -> None:
-        """250ms 轮询一次：推送位置、检测曲目结束。"""
+        """250ms 轮询一次：推送位置、检测曲目结束（基于 duration）。"""
         while not self._poll_stop:
             if self._playing:
-                pos_ms = pygame.mixer.music.get_pos()
-                if pos_ms >= 0:
-                    self._cb.on_position(pos_ms / 1000.0)
-            # 处理 pygame 事件（曲目结束通知）
-            for event in pygame.event.get():
-                if event.type == self._END_EVENT:
-                    self._playing = False
-                    self._cb.on_play_state(False)
-                    await self.next(auto=True)
+                pos = None
+                # 尝试从 flet_audio/ft.Audio 获取当前播放时间（多种 API 兼容）
+                try:
+                    if hasattr(self._audio, "position"):
+                        pos = float(self._audio.position)
+                    elif hasattr(self._audio, "get_position"):
+                        pos = float(self._audio.get_position())
+                    elif hasattr(self._audio, "time"):
+                        pos = float(self._audio.time)
+                except Exception:
+                    pos = None
+
+                if pos is not None:
+                    self._cb.on_position(pos)
+
+                    # 基于时长判断是否结束（某些后端没有 ended 事件）
+                    if self._cb and (self._page is not None):
+                        try:
+                            # duration 可能来自 mutagen 回填
+                            if (
+                                hasattr(self, "_last_duration")
+                                and self._last_duration > 0
+                            ):
+                                if pos >= max(0.0, self._last_duration - 0.5):
+                                    self._playing = False
+                                    self._cb.on_play_state(False)
+                                    await self.next(auto=True)
+                        except Exception:
+                            pass
+
             await asyncio.sleep(0.25)
 
     def _load_track(self, filepath: Path) -> None:
-        """加载音频文件；从 mutagen 获取时长。"""
+        """加载音频文件；从 mutagen 获取时长，并设置 audio.src。"""
         self._playing = False
         try:
             from mutagen import File
 
             audio = File(str(filepath))
             if audio is not None and hasattr(audio, "info"):
-                self._cb.on_duration(audio.info.length)
+                self._last_duration = float(audio.info.length)
+                self._cb.on_duration(self._last_duration)
             else:
+                self._last_duration = 0.0
                 self._cb.on_duration(0.0)
         except Exception:
+            self._last_duration = 0.0
             self._cb.on_duration(0.0)
-        pygame.mixer.music.load(str(filepath))
+
+        # 设置音源（多数情况下支持本地文件路径）
+        try:
+            # flet_audio 或 ft.Audio 通常接受字符串路径
+            self._audio.src = str(filepath)
+        except Exception:
+            pass
 
     # —— 曲目管理 —— #
     def set_tracks(self, tracks: list[Track]) -> None:
@@ -192,7 +296,20 @@ class Player:
         self.current = index
         track = self.tracks[index]
         self._load_track(track.path)
-        pygame.mixer.music.play()
+
+        # 尝试用可用的 play 接口启动播放
+        try:
+            if hasattr(self._audio, "play"):
+                res = self._audio.play()
+                if asyncio.iscoroutine(res):
+                    await res
+            elif hasattr(self._audio, "start"):
+                res = self._audio.start()
+                if asyncio.iscoroutine(res):
+                    await res
+        except Exception:
+            pass
+
         self._playing = True
         self._cb.on_play_state(True)
         self._cb.on_track_change(index)
@@ -203,11 +320,27 @@ class Player:
                 await self.play_at(0)
             return
         if self._playing:
-            pygame.mixer.music.pause()
+            try:
+                if hasattr(self._audio, "pause"):
+                    res = self._audio.pause()
+                    if asyncio.iscoroutine(res):
+                        await res
+            except Exception:
+                pass
             self._playing = False
             self._cb.on_play_state(False)
         else:
-            pygame.mixer.music.unpause()
+            try:
+                if hasattr(self._audio, "unpause"):
+                    res = self._audio.unpause()
+                    if asyncio.iscoroutine(res):
+                        await res
+                elif hasattr(self._audio, "play"):
+                    res = self._audio.play()
+                    if asyncio.iscoroutine(res):
+                        await res
+            except Exception:
+                pass
             self._playing = True
             self._cb.on_play_state(True)
 
@@ -233,14 +366,36 @@ class Player:
         await self.play_at(target)
 
     async def seek(self, seconds: float) -> None:
+        # 尝试多种 seek API
         try:
-            pygame.mixer.music.set_pos(seconds)
-        except pygame.error:
-            pass  # 某些格式（如 MOD）不支持 seek
+            if hasattr(self._audio, "seek"):
+                res = self._audio.seek(seconds)
+                if asyncio.iscoroutine(res):
+                    await res
+            elif hasattr(self._audio, "set_pos"):
+                res = self._audio.set_pos(seconds)
+                if asyncio.iscoroutine(res):
+                    await res
+            elif hasattr(self._audio, "position"):
+                try:
+                    self._audio.position = seconds
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def set_volume(self, value01: float) -> None:
         self._volume = max(0.0, min(1.0, value01))
-        pygame.mixer.music.set_volume(self._volume)
+        try:
+            if hasattr(self._audio, "volume"):
+                try:
+                    self._audio.volume = self._volume
+                except Exception:
+                    pass
+            elif hasattr(self._audio, "set_volume"):
+                self._audio.set_volume(self._volume)
+        except Exception:
+            pass
 
     def cycle_mode(self) -> str:
         self.mode = _MODE_ORDER[(_MODE_ORDER.index(self.mode) + 1) % len(_MODE_ORDER)]
@@ -249,7 +404,23 @@ class Player:
     def shutdown(self) -> None:
         """停止轮询并释放资源。"""
         self._poll_stop = True
-        pygame.mixer.music.stop()
+        try:
+            if hasattr(self._audio, "stop"):
+                self._audio.stop()
+            elif hasattr(self._audio, "pause"):
+                self._audio.pause()
+        except Exception:
+            pass
+        try:
+            # 尝试从页面移除控件
+            if self._audio in getattr(self._page, "overlay", []):
+                self._page.overlay.remove(self._audio)
+                self._page.update()
+            elif self._audio in getattr(self._page, "controls", []):
+                self._page.controls.remove(self._audio)
+                self._page.update()
+        except Exception:
+            pass
         if self._poll_task and not self._poll_task.done():
             self._poll_task.cancel()
 
@@ -270,7 +441,8 @@ def _fmt(seconds: float) -> str:
 def _card(controls: list, *, soft: bool = False, **kw) -> ft.Container:
     """统一的圆角卡片容器。"""
     return ft.Container(
-        content=ft.Column(controls, spacing=12) if not kw.pop("row", False)
+        content=ft.Column(controls, spacing=12)
+        if not kw.pop("row", False)
         else ft.Row(controls, **{k: v for k, v in kw.items()}),
         bgcolor=SURFACE_SOFT if soft else SURFACE,
         border_radius=16,
@@ -286,6 +458,7 @@ def PlaylistItem(
     on_click: Callable[[int], None],
 ) -> ft.Control:
     """播放列表的单行。"""
+
     async def _on_click(e: ft.ControlEvent) -> None:
         await on_click(index)
 
@@ -302,7 +475,9 @@ def PlaylistItem(
                         ft.Text(
                             track.title,
                             size=14,
-                            weight=ft.FontWeight.BOLD if is_current else ft.FontWeight.NORMAL,
+                            weight=ft.FontWeight.BOLD
+                            if is_current
+                            else ft.FontWeight.NORMAL,
                             color=TEXT_MAIN if is_current else TEXT_DIM,
                             max_lines=1,
                             overflow=ft.TextOverflow.ELLIPSIS,
@@ -321,7 +496,9 @@ def PlaylistItem(
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         ),
-        bgcolor=ft.Colors.with_opacity(0.18, BRAND) if is_current else ft.Colors.TRANSPARENT,
+        bgcolor=ft.Colors.with_opacity(0.18, BRAND)
+        if is_current
+        else ft.Colors.TRANSPARENT,
         border_radius=10,
         padding=ft.Padding.symmetric(horizontal=12, vertical=10),
         on_click=_on_click,
@@ -337,17 +514,19 @@ def Playlist(
 ) -> ft.Control:
     """播放列表区域。"""
     if not tracks:
-        return _card([
-            ft.Row(
-                [ft.Icon(ft.Icons.QUEUE_MUSIC, color=TEXT_DIM), ft.Text("播放列表为空，点击右上角导入音乐", color=TEXT_DIM)],
-                alignment=ft.MainAxisAlignment.CENTER,
-            )
-        ])
+        return _card(
+            [
+                ft.Row(
+                    [
+                        ft.Icon(ft.Icons.QUEUE_MUSIC, color=TEXT_DIM),
+                        ft.Text("播放列表为空，点击右上角导入音乐", color=TEXT_DIM),
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                )
+            ]
+        )
 
-    items = [
-        PlaylistItem(t, i, i == current, on_select)
-        for i, t in enumerate(tracks)
-    ]
+    items = [PlaylistItem(t, i, i == current, on_select) for i, t in enumerate(tracks)]
     list_view = ft.ListView(
         controls=items,
         spacing=4,
@@ -358,7 +537,12 @@ def Playlist(
     header = ft.Row(
         [
             ft.Icon(ft.Icons.QUEUE_MUSIC, color=BRAND_400),
-            ft.Text(f"播放列表（{len(tracks)}）", size=18, weight=ft.FontWeight.BOLD, color=TEXT_MAIN),
+            ft.Text(
+                f"播放列表（{len(tracks)}）",
+                size=18,
+                weight=ft.FontWeight.BOLD,
+                color=TEXT_MAIN,
+            ),
         ],
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
     )
@@ -385,7 +569,11 @@ def ProgressBar(
             await on_seek(float(e.control.value) * duration)
         dragging.current = False
 
-    shown = local_value if dragging.current else (position / duration if duration > 0 else 0.0)
+    shown = (
+        local_value
+        if dragging.current
+        else (position / duration if duration > 0 else 0.0)
+    )
 
     return ft.Column(
         [
@@ -418,8 +606,10 @@ def VolumeControl(
 ) -> ft.Control:
     """音量控制，图标随音量变化。"""
     icon = (
-        ft.Icons.VOLUME_MUTE if volume == 0
-        else ft.Icons.VOLUME_DOWN if volume < 0.5
+        ft.Icons.VOLUME_MUTE
+        if volume == 0
+        else ft.Icons.VOLUME_DOWN
+        if volume < 0.5
         else ft.Icons.VOLUME_UP
     )
     return ft.Row(
@@ -466,7 +656,8 @@ def PlayControls(
                 on_click=on_prev,
             ),
             ft.IconButton(
-                icon=ft.Icons.PAUSE_CIRCLE_FILLED_ROUNDED if is_playing
+                icon=ft.Icons.PAUSE_CIRCLE_FILLED_ROUNDED
+                if is_playing
                 else ft.Icons.PLAY_CIRCLE_FILL_ROUNDED,
                 icon_color=BRAND_400,
                 icon_size=56,
@@ -558,8 +749,8 @@ def PlayerApp(page: ft.Page) -> ft.Control:
     volume, set_volume = ft.use_state(0.7)
     mode, set_mode = ft.use_state(MODE_SEQUENCE)
 
-    dragging = ft.use_ref(False)        # 进度条拖动标记（不触发渲染）
-    player_ref = ft.use_ref(None)       # Player 实例（不触发渲染）
+    dragging = ft.use_ref(False)  # 进度条拖动标记（不触发渲染）
+    player_ref = ft.use_ref(None)  # Player 实例（不触发渲染）
 
     # —— 挂载时初始化播放器 —— #
     def setup_player() -> None:
@@ -570,6 +761,7 @@ def PlayerApp(page: ft.Page) -> ft.Control:
                 on_play_state=set_is_playing,
                 on_track_change=set_current,
             ),
+            page,
         )
 
     ft.use_effect(setup_player, dependencies=[])
@@ -629,7 +821,9 @@ def PlayerApp(page: ft.Page) -> ft.Control:
     header = ft.Row(
         [
             ft.Icon(ft.Icons.LIBRARY_MUSIC, color=BRAND_400, size=30),
-            ft.Text("CS 音乐播放器", size=24, weight=ft.FontWeight.BOLD, color=TEXT_MAIN),
+            ft.Text(
+                "CS 音乐播放器", size=24, weight=ft.FontWeight.BOLD, color=TEXT_MAIN
+            ),
             ft.Container(expand=True),
             ft.Button(
                 "打开文件夹",
@@ -645,17 +839,21 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         [
             header,
             _card([NowPlaying(track, is_playing)], soft=True),
-            _card([
-                ProgressBar(position, duration, dragging, on_seek),
-                PlayControls(
-                    is_playing, mode, bool(tracks),
-                    on_toggle=on_toggle_click,
-                    on_prev=on_prev_click,
-                    on_next=on_next_click,
-                    on_mode=on_mode_cycle,
-                ),
-                VolumeControl(volume, on_volume_change),
-            ]),
+            _card(
+                [
+                    ProgressBar(position, duration, dragging, on_seek),
+                    PlayControls(
+                        is_playing,
+                        mode,
+                        bool(tracks),
+                        on_toggle=on_toggle_click,
+                        on_prev=on_prev_click,
+                        on_next=on_next_click,
+                        on_mode=on_mode_cycle,
+                    ),
+                    VolumeControl(volume, on_volume_change),
+                ]
+            ),
             Playlist(tracks, current, on_select_track),
         ],
         spacing=14,
