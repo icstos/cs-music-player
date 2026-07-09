@@ -7,13 +7,19 @@ from collections.abc import Callable
 import flet as ft
 
 from .constants import (
-    BRAND,
-    BRAND_400,
-    MODE_ICONS,
+    BORDER,
+    BORDER_FOCUS,
+    PRIMARY,
+    PRIMARY_BG,
+    PRIMARY_LIGHT,
+    PRIMARY_TINT_15,
+    PRIMARY_TINT_20,
     SURFACE,
     SURFACE_SOFT,
     TEXT_DIM,
     TEXT_MAIN,
+    TEXT_MUTED,
+    MODE_ICONS,
 )
 from .audio_player import Track
 
@@ -27,11 +33,12 @@ def _fmt(seconds: float) -> str:
 
 
 def card(controls: list[ft.Control], *, soft: bool = False) -> ft.Container:
-    """统一的圆角卡片容器。"""
+    """统一的圆角描边卡片容器。"""
     return ft.Container(
         content=ft.Column(controls, spacing=12),
         bgcolor=SURFACE_SOFT if soft else SURFACE,
-        border_radius=16,
+        border=ft.Border.all(1, BORDER),
+        border_radius=14,
         padding=20,
     )
 
@@ -54,7 +61,7 @@ def PlaylistItem(
             [
                 ft.Icon(
                     ft.Icons.GRAPHIC_EQ if is_current else ft.Icons.MUSIC_NOTE,
-                    color=BRAND_400 if is_current else TEXT_DIM,
+                    color=PRIMARY_LIGHT if is_current else TEXT_MUTED,
                     size=20,
                 ),
                 ft.Column(
@@ -72,7 +79,7 @@ def PlaylistItem(
                         ft.Text(
                             track.path.parent.name,
                             size=11,
-                            color=ft.Colors.GREY_600,
+                            color=TEXT_MUTED,
                             max_lines=1,
                             overflow=ft.TextOverflow.ELLIPSIS,
                         ),
@@ -83,10 +90,11 @@ def PlaylistItem(
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         ),
-        bgcolor=ft.Colors.with_opacity(0.18, BRAND)
+        bgcolor=PRIMARY_BG if is_current else ft.Colors.TRANSPARENT,
+        border=ft.Border.all(1, BORDER_FOCUS)
         if is_current
-        else ft.Colors.TRANSPARENT,
-        border_radius=10,
+        else ft.Border.all(1, ft.Colors.TRANSPARENT),
+        border_radius=8,
         padding=ft.Padding.symmetric(horizontal=12, vertical=10),
         on_click=_on_click,
         ink=True,
@@ -104,7 +112,7 @@ def Playlist(
             [
                 ft.Row(
                     [
-                        ft.Icon(ft.Icons.QUEUE_MUSIC, color=TEXT_DIM),
+                        ft.Icon(ft.Icons.QUEUE_MUSIC, color=TEXT_MUTED),
                         ft.Text("播放列表为空，点击右上角导入音乐", color=TEXT_DIM),
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
@@ -116,11 +124,11 @@ def Playlist(
         [
             ft.Row(
                 [
-                    ft.Icon(ft.Icons.QUEUE_MUSIC, color=BRAND_400),
+                    ft.Icon(ft.Icons.QUEUE_MUSIC, color=PRIMARY_LIGHT, size=22),
                     ft.Text(
                         f"播放列表（{len(tracks)}）",
-                        size=18,
-                        weight=ft.FontWeight.BOLD,
+                        size=16,
+                        weight=ft.FontWeight.W_600,
                         color=TEXT_MAIN,
                     ),
                 ],
@@ -173,8 +181,9 @@ def ProgressBar(
                 min=0,
                 max=1,
                 value=value,
-                active_color=BRAND_400,
-                thumb_color=BRAND,
+                active_color=PRIMARY,
+                inactive_color=BORDER,
+                thumb_color=PRIMARY_LIGHT,
                 on_change=on_change,
                 on_change_end=on_change_end,
                 expand=True,
@@ -205,13 +214,14 @@ def VolumeControl(volume: float, on_change: Callable[[float], None]) -> ft.Contr
     )
     return ft.Row(
         [
-            ft.Icon(icon, color=BRAND_400, size=22),
+            ft.Icon(icon, color=PRIMARY_LIGHT, size=22),
             ft.Slider(
                 min=0,
                 max=1,
                 value=volume,
-                active_color=BRAND_400,
-                thumb_color=BRAND,
+                active_color=PRIMARY,
+                inactive_color=BORDER,
+                thumb_color=PRIMARY_LIGHT,
                 on_change=lambda e: on_change(float(e.control.value)),
                 width=130,
             ),
@@ -237,7 +247,7 @@ def PlayControls(
         [
             ft.IconButton(
                 icon=MODE_ICONS[mode],
-                icon_color=BRAND_400,
+                icon_color=PRIMARY_LIGHT,
                 tooltip=mode,
                 on_click=on_mode,
             ),
@@ -252,7 +262,7 @@ def PlayControls(
                 icon=ft.Icons.PAUSE_CIRCLE_FILLED_ROUNDED
                 if is_playing
                 else ft.Icons.PLAY_CIRCLE_FILL_ROUNDED,
-                icon_color=BRAND_400,
+                icon_color=PRIMARY_LIGHT,
                 icon_size=56,
                 tooltip="播放/暂停",
                 on_click=on_toggle,
@@ -268,7 +278,7 @@ def PlayControls(
                 content=ft.Text(
                     "♪" if has_tracks else "",
                     size=18,
-                    color=ft.Colors.with_opacity(0.4, BRAND_400),
+                    color=PRIMARY_TINT_20,
                 ),
                 width=44,
                 alignment=ft.Alignment.CENTER,
@@ -291,14 +301,15 @@ def NowPlaying(track: Track | None, is_playing: bool) -> ft.Control:
             ft.Container(
                 content=ft.Icon(
                     ft.Icons.GRAPHIC_EQ if is_playing else ft.Icons.ALBUM,
-                    size=64,
-                    color=BRAND_400,
+                    size=56,
+                    color=PRIMARY_LIGHT,
                 ),
-                width=96,
-                height=96,
+                width=88,
+                height=88,
                 alignment=ft.Alignment.CENTER,
-                bgcolor=ft.Colors.with_opacity(0.15, BRAND),
-                border_radius=16,
+                bgcolor=PRIMARY_TINT_15,
+                border=ft.Border.all(1, BORDER),
+                border_radius=14,
             ),
             ft.Column(
                 [

@@ -7,7 +7,7 @@ from pathlib import Path
 import flet as ft
 
 from .audio_player import Player, PlayerCallbacks, Track, load_tracks_from_directory
-from .constants import MODE_SEQUENCE
+from .constants import PRIMARY, PRIMARY_DARK, PRIMARY_LIGHT, TEXT_MAIN, MODE_SEQUENCE
 from .ui import NowPlaying, PlayControls, Playlist, ProgressBar, VolumeControl, card
 
 
@@ -99,14 +99,22 @@ def PlayerApp(page: ft.Page) -> ft.Control:
 
     header = ft.Row(
         [
-            ft.Icon(ft.Icons.LIBRARY_MUSIC, color=ft.Colors.DEEP_PURPLE_400, size=30),
-            ft.Text("CS 音乐播放器", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+            ft.Icon(ft.Icons.LIBRARY_MUSIC, color=PRIMARY_LIGHT, size=28),
+            ft.Text(
+                "CS 音乐播放器", size=22, weight=ft.FontWeight.BOLD, color=TEXT_MAIN
+            ),
             ft.Container(expand=True),
             ft.Button(
                 content="打开文件夹",
                 icon=ft.Icons.FOLDER_OPEN,
                 on_click=on_import,
-                style=ft.ButtonStyle(bgcolor=ft.Colors.DEEP_PURPLE, color=ft.Colors.WHITE),
+                style=ft.ButtonStyle(
+                    bgcolor={
+                        ft.ControlState.DEFAULT: PRIMARY,
+                        ft.ControlState.HOVERED: PRIMARY_DARK,
+                    },
+                    color=ft.Colors.WHITE,
+                ),
             ),
         ],
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -116,11 +124,21 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         [
             header,
             card([NowPlaying(track, is_playing)], soft=True),
-            card([
-                ProgressBar(position, duration, dragging, on_seek),
-                PlayControls(is_playing, mode, bool(tracks), on_toggle, on_prev, on_next, on_mode),
-                VolumeControl(volume, on_volume),
-            ]),
+            card(
+                [
+                    ProgressBar(position, duration, dragging, on_seek),
+                    PlayControls(
+                        is_playing,
+                        mode,
+                        bool(tracks),
+                        on_toggle,
+                        on_prev,
+                        on_next,
+                        on_mode,
+                    ),
+                    VolumeControl(volume, on_volume),
+                ]
+            ),
             Playlist(tracks, current, on_select),
         ],
         spacing=14,
