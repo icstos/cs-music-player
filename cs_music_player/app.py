@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import flet as ft
@@ -25,9 +24,10 @@ def PlayerApp(page: ft.Page) -> ft.Control:
 
     dragging = ft.use_ref(False)
     player_ref = ft.use_ref(None)
+    picker_ref = ft.use_ref(None)
 
-    # —— 初始化播放器 —— #
-    def setup_player() -> None:
+    # —— 初始化播放器 + FilePicker —— #
+    def setup() -> None:
         player_ref.current = Player(
             PlayerCallbacks(
                 on_position=set_position,
@@ -37,13 +37,20 @@ def PlayerApp(page: ft.Page) -> ft.Control:
             ),
             page,
         )
+        picker = ft.FilePicker()
+        page.services.append(picker)
+        page.update()
+        picker_ref.current = picker
 
-    ft.use_effect(setup_player, dependencies=[])
+    ft.use_effect(setup, dependencies=[])
 
     # —— 事件处理 —— #
 
     async def on_import(e: ft.ControlEvent) -> None:
-        directory = await _pick_folder()
+        picker = picker_ref.current
+        if picker is None:
+            return
+        directory = await picker.get_directory_path("选择音乐文件夹")
         if not directory:
             return
         files = load_tracks_from_directory(Path(directory))
@@ -120,20 +127,3 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         scroll=ft.ScrollMode.AUTO,
         expand=True,
     )
-
-
-async def _pick_folder(title: str = "选择音乐文件夹") -> str | None:
-    """异步弹出系统文件夹选择对话框。"""
-    import tkinter as tk
-    from tkinter import filedialog
-
-    def _choose() -> str | None:
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        try:
-            return filedialog.askdirectory(title=title)
-        finally:
-            root.destroy()
-
-    return await asyncio.get_running_loop().run_in_executor(None, _choose)
