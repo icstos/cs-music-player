@@ -1,3 +1,0 @@
-flet>=0.85.3
-flet-audio>=0.85.3
-mutagen>=1.47
