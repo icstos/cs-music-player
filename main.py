@@ -11,11 +11,13 @@ def main(page: ft.Page) -> None:
     page.theme_mode = ft.ThemeMode.LIGHT
     page.theme = ft.Theme(color_scheme_seed=PRIMARY)
     page.bgcolor = BG
-    page.window.width = 1000
-    page.window.height = 720
-    page.window.min_width = 760
-    page.window.min_height = 600
-    page.padding = 24
+    page.window.min_width = 900
+    page.window.min_height = 640
+    page.window.width = 1180
+    page.window.height = 780
+    page.window.resizable = True
+    page.window.maximizable = True
+    page.padding = 0
     page.render(PlayerApp, page)
 
 

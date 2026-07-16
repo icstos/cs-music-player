@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import random
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -30,6 +31,8 @@ class Track:
     title: str = ""
     duration: float = 0.0
     lyrics_path: Path | None = None
+    favorite: bool = False
+    cover_src: str | None = None
 
     def __post_init__(self) -> None:
         if not self.title:
@@ -62,6 +65,39 @@ def get_track_duration(path: Path) -> float:
     return 0.0
 
 
+def extract_cover_src(path: Path) -> str | None:
+    """从音频内嵌标签提取封面，返回 data URI；无封面时返回 None。"""
+    try:
+        from mutagen import File
+
+        audio = File(str(path))
+        if audio is None:
+            return None
+
+        data: bytes | None = None
+        mime = "image/jpeg"
+
+        if hasattr(audio, "pictures") and audio.pictures:
+            pic = audio.pictures[0]
+            data = pic.data
+            mime = pic.mime or "image/jpeg"
+        elif audio.tags:
+            for tag in audio.tags.values():
+                tag_data = getattr(tag, "data", None)
+                if isinstance(tag_data, bytes):
+                    data = tag_data
+                    mime = getattr(tag, "mime", None) or "image/jpeg"
+                    break
+
+        if not data:
+            return None
+
+        encoded = base64.b64encode(data).decode("ascii")
+        return f"data:{mime};base64,{encoded}"
+    except Exception:
+        return None
+
+
 def load_tracks_from_directory(directory: Path) -> list[Track]:
     """扫描目录下的音频文件，并匹配同目录 lyrics 子文件夹中的歌词。"""
     lyrics_index = build_lyrics_index(directory / "lyrics")
@@ -70,6 +106,7 @@ def load_tracks_from_directory(directory: Path) -> list[Track]:
             path=f,
             duration=get_track_duration(f),
             lyrics_path=match_lyrics_path(lyrics_index, f.stem),
+            cover_src=extract_cover_src(f),
         )
         for f in sorted(directory.iterdir())
         if f.is_file() and f.suffix.lower() in SUPPORTED_FORMATS
