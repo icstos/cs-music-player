@@ -6,6 +6,7 @@ import flet as ft
 
 # ── 文件格式 ── #
 SUPPORTED_FORMATS = (".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac")
+SUPPORTED_LYRICS_FORMATS = (".lrc", ".txt")
 
 # ── 播放模式 ── #
 MODE_SEQUENCE = "顺序播放"

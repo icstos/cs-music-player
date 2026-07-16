@@ -18,6 +18,7 @@ from .constants import (
     MODE_SHUFFLE,
     SUPPORTED_FORMATS,
 )
+from .lyrics import build_lyrics_index, match_lyrics_path
 
 
 # ── 数据模型 ── #
@@ -28,6 +29,7 @@ class Track:
     path: Path
     title: str = ""
     duration: float = 0.0
+    lyrics_path: Path | None = None
 
     def __post_init__(self) -> None:
         if not self.title:
@@ -61,9 +63,14 @@ def get_track_duration(path: Path) -> float:
 
 
 def load_tracks_from_directory(directory: Path) -> list[Track]:
-    """扫描目录下的音频文件，返回按文件名排序的 Track 列表。"""
+    """扫描目录下的音频文件，并匹配同目录 lyrics 子文件夹中的歌词。"""
+    lyrics_index = build_lyrics_index(directory / "lyrics")
     return [
-        Track(path=f, duration=get_track_duration(f))
+        Track(
+            path=f,
+            duration=get_track_duration(f),
+            lyrics_path=match_lyrics_path(lyrics_index, f.stem),
+        )
         for f in sorted(directory.iterdir())
         if f.is_file() and f.suffix.lower() in SUPPORTED_FORMATS
     ]

@@ -8,7 +8,8 @@ import flet as ft
 
 from .audio_player import Player, PlayerCallbacks, Track, load_tracks_from_directory
 from .constants import PRIMARY, PRIMARY_DARK, PRIMARY_LIGHT, TEXT_MAIN, MODE_SEQUENCE
-from .ui import NowPlaying, PlayControls, Playlist, ProgressBar, VolumeControl, card
+from .lyrics import load_lyrics
+from .ui import LyricsPanel, NowPlaying, PlayControls, Playlist, ProgressBar, VolumeControl, card
 
 
 @ft.component
@@ -21,6 +22,7 @@ def PlayerApp(page: ft.Page) -> ft.Control:
     duration, set_duration = ft.use_state(0.0)
     volume, set_volume = ft.use_state(0.7)
     mode, set_mode = ft.use_state(MODE_SEQUENCE)
+    lyrics, set_lyrics = ft.use_state(list())
 
     dragging = ft.use_ref(False)
     player_ref = ft.use_ref(None)
@@ -43,6 +45,15 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         picker_ref.current = picker
 
     ft.use_effect(setup, dependencies=[])
+
+    def refresh_lyrics() -> None:
+        track = tracks[current] if 0 <= current < len(tracks) else None
+        if track is None or track.lyrics_path is None:
+            set_lyrics([])
+            return
+        set_lyrics(load_lyrics(track.lyrics_path))
+
+    ft.use_effect(refresh_lyrics, [current, tracks])
 
     # —— 事件处理 —— #
 
@@ -124,6 +135,11 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         [
             header,
             card([NowPlaying(track, is_playing)], soft=True),
+            LyricsPanel(
+                lyrics,
+                position,
+                track.lyrics_path is not None if track else False,
+            ),
             card(
                 [
                     ProgressBar(position, duration, dragging, on_seek),

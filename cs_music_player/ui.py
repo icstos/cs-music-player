@@ -22,6 +22,7 @@ from .constants import (
     MODE_ICONS,
 )
 from .audio_player import Track
+from .lyrics import LyricLine, current_line_index
 
 
 def _fmt(seconds: float) -> str:
@@ -286,6 +287,74 @@ def PlayControls(
         ],
         alignment=ft.MainAxisAlignment.CENTER,
         spacing=18,
+    )
+
+
+# ── 歌词面板 ── #
+
+
+@ft.component
+def LyricsLine(
+    text: str,
+    is_current: bool,
+) -> ft.Control:
+    return ft.Text(
+        text,
+        size=15 if is_current else 14,
+        weight=ft.FontWeight.BOLD if is_current else ft.FontWeight.NORMAL,
+        color=PRIMARY_LIGHT if is_current else TEXT_MUTED,
+        text_align=ft.TextAlign.CENTER,
+        max_lines=2,
+        overflow=ft.TextOverflow.ELLIPSIS,
+    )
+
+
+@ft.component
+def LyricsPanel(
+    lines: list[LyricLine],
+    position: float,
+    has_lyrics_file: bool,
+) -> ft.Control:
+    active = current_line_index(lines, position)
+
+    if not has_lyrics_file:
+        body = ft.Text("暂无歌词", size=14, color=TEXT_DIM, text_align=ft.TextAlign.CENTER)
+    elif not lines:
+        body = ft.Text(
+            "歌词文件无法解析",
+            size=14,
+            color=TEXT_DIM,
+            text_align=ft.TextAlign.CENTER,
+        )
+    else:
+        body = ft.Column(
+            controls=[
+                LyricsLine(line.text, i == active)
+                for i, line in enumerate(lines)
+            ],
+            spacing=10,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            scroll=ft.ScrollMode.AUTO,
+            height=180,
+        )
+
+    return card(
+        [
+            ft.Row(
+                [
+                    ft.Icon(ft.Icons.SUBTITLES, color=PRIMARY_LIGHT, size=22),
+                    ft.Text(
+                        "歌词",
+                        size=16,
+                        weight=ft.FontWeight.W_600,
+                        color=TEXT_MAIN,
+                    ),
+                ],
+                spacing=8,
+            ),
+            body,
+        ],
+        soft=True,
     )
 
 
