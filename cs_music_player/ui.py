@@ -417,6 +417,14 @@ def PlayControls(
 ) -> ft.Control:
     play_size = 44 if compact else 52
     skip_size = 28 if compact else 32
+    play_icon_size = 26 if compact else 30
+    play_icon = ft.Icons.PAUSE_ROUNDED if is_playing else ft.Icons.PLAY_ARROW_ROUNDED
+    play_icon_control: ft.Control = ft.Icon(play_icon, color=SURFACE, size=play_icon_size)
+    if not is_playing:
+        play_icon_control = ft.Container(
+            content=play_icon_control,
+            margin=ft.Margin.only(left=2),
+        )
     return ft.Row(
         [
             ft.IconButton(
@@ -436,19 +444,14 @@ def PlayControls(
                 disabled=not has_tracks,
             ),
             ft.Container(
-                content=ft.IconButton(
-                    icon=ft.Icons.PAUSE_ROUNDED if is_playing else ft.Icons.PLAY_ARROW_ROUNDED,
-                    icon_color=SURFACE,
-                    icon_size=play_size - 8,
-                    tooltip="播放/暂停",
-                    on_click=on_toggle,
-                    disabled=not has_tracks,
-                ),
+                content=play_icon_control,
                 width=play_size,
                 height=play_size,
                 alignment=ft.Alignment.CENTER,
                 bgcolor=PRIMARY if has_tracks else TEXT_MUTED,
                 border_radius=play_size // 2,
+                on_click=on_toggle if has_tracks else None,
+                ink=True,
                 shadow=ft.BoxShadow(
                     spread_radius=0,
                     blur_radius=12,
