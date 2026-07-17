@@ -31,6 +31,7 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         card_bgcolor="#111827",
     )
     tracks, set_tracks = ft.use_state(list[Track]())
+    selected, set_selected = ft.use_state(-1)
     current, set_current = ft.use_state(-1)
     is_playing, set_is_playing = ft.use_state(False)
     position, set_position = ft.use_state(0.0)
@@ -64,13 +65,14 @@ def PlayerApp(page: ft.Page) -> ft.Control:
     ft.use_effect(setup, dependencies=[])
 
     def refresh_lyrics() -> None:
-        track = tracks[current] if 0 <= current < len(tracks) else None
+        idx = current if current >= 0 else selected
+        track = tracks[idx] if 0 <= idx < len(tracks) else None
         if track is None or track.lyrics_path is None:
             set_lyrics([])
             return
         set_lyrics(load_lyrics(track.lyrics_path))
 
-    ft.use_effect(refresh_lyrics, [current, tracks])
+    ft.use_effect(refresh_lyrics, [current, selected, tracks])
 
     def on_brightness_change(e: ft.ControlEvent) -> None:
         page.theme_mode = (
@@ -98,10 +100,12 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         if player:
             player.set_tracks(files)
         set_tracks(files)
-        set_current(0)
+        set_selected(0)
+        set_current(-1)
         set_position(0.0)
         set_duration(files[0].duration)
         set_lyrics([])
+        set_is_playing(False)
 
     async def on_toggle(e: ft.ControlEvent) -> None:
         if player_ref.current:
@@ -124,13 +128,21 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         if player_ref.current:
             set_mode(player_ref.current.cycle_mode())
 
-    async def on_select(track: Track) -> None:
+    def on_select(track: Track) -> None:
+        try:
+            index = tracks.index(track)
+        except ValueError:
+            return
+        set_selected(index)
+
+    async def on_play(track: Track) -> None:
         try:
             index = tracks.index(track)
         except ValueError:
             return
         if player_ref.current:
             await player_ref.current.play_at(index)
+        set_selected(index)
 
     async def on_favorite(track: Track) -> None:
         key = track_key(track.path)
@@ -147,7 +159,9 @@ def PlayerApp(page: ft.Page) -> ft.Control:
             await player_ref.current.seek(seconds)
             set_position(seconds)
 
-    track = tracks[current] if 0 <= current < len(tracks) else None
+    playing_track = tracks[current] if 0 <= current < len(tracks) else None
+    display_index = current if current >= 0 else selected
+    track = tracks[display_index] if 0 <= display_index < len(tracks) else None
     has_lyrics = bool(track and track.lyrics_path)
     playlist_count = len(tracks)
 
@@ -161,7 +175,10 @@ def PlayerApp(page: ft.Page) -> ft.Control:
             or search.lower() in t.path.parent.name.lower()
         )
     ]
-    filtered_current = next((i for i, t in enumerate(filtered_tracks) if t is track), -1)
+    filtered_selected = next(
+        (i for i, t in enumerate(filtered_tracks) if t is tracks[selected]),
+        -1,
+    ) if 0 <= selected < len(tracks) else -1
 
     toolbar = ft.Container(
         content=ft.Row(
@@ -224,13 +241,15 @@ def PlayerApp(page: ft.Page) -> ft.Control:
                     [
                         Sidebar(
                             filtered_tracks,
-                            filtered_current,
+                            filtered_selected,
+                            playing_track,
                             search,
                             show_favorites,
                             playlist_count,
                             set_search,
                             set_show_favorites,
                             on_select,
+                            on_play,
                             on_favorite,
                             is_playing,
                         ),

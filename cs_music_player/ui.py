@@ -105,35 +105,39 @@ def _track_cover(
 def PlaylistItem(
     index: int,
     track: Track,
-    is_current: bool,
+    is_selected: bool,
     is_playing: bool,
-    on_click: Callable[[Track], None],
+    on_select: Callable[[Track], None],
+    on_play: Callable[[Track], None],
     on_favorite: Callable[[Track], None],
 ) -> ft.Control:
-    async def _on_click(e: ft.ControlEvent) -> None:
-        await on_click(track)
+    def _on_select(e: ft.ControlEvent) -> None:
+        on_select(track)
+
+    async def _on_play(e: ft.ControlEvent) -> None:
+        await on_play(track)
 
     async def _on_favorite(e: ft.ControlEvent) -> None:
         await on_favorite(track)
 
-    return ft.Container(
+    row = ft.Container(
         content=ft.Row(
             [
                 ft.Text(
                     f"{index + 1:02d}",
                     size=12,
-                    color=PRIMARY_LIGHT if is_current else TEXT_MUTED,
+                    color=PRIMARY_LIGHT if is_selected else TEXT_MUTED,
                     width=28,
                     text_align=ft.TextAlign.CENTER,
                 ),
-                _track_cover(track, size=40, is_current=is_current, is_playing=is_playing),
+                _track_cover(track, size=40, is_current=is_selected, is_playing=is_playing),
                 ft.Column(
                     [
                         ft.Text(
                             track.title,
                             size=13,
-                            weight=ft.FontWeight.W_600 if is_current else ft.FontWeight.W_500,
-                            color=TEXT_MAIN if is_current else TEXT_DIM,
+                            weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.W_500,
+                            color=TEXT_MAIN if is_selected else TEXT_DIM,
                             max_lines=1,
                             overflow=ft.TextOverflow.ELLIPSIS,
                         ),
@@ -163,30 +167,37 @@ def PlaylistItem(
             spacing=10,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        bgcolor=PRIMARY_BG if is_current else ft.Colors.TRANSPARENT,
+        bgcolor=PRIMARY_BG if is_selected else ft.Colors.TRANSPARENT,
         border=ft.Border(
-            left=ft.BorderSide(3, PRIMARY if is_current else ft.Colors.TRANSPARENT),
+            left=ft.BorderSide(3, PRIMARY if is_selected else ft.Colors.TRANSPARENT),
         ),
         padding=ft.Padding.only(left=8, right=8, top=6, bottom=6),
-        on_click=_on_click,
         ink=True,
+    )
+
+    return ft.GestureDetector(
+        on_tap=_on_select,
+        on_double_tap=_on_play,
+        content=row,
     )
 
 
 @ft.component
 def Sidebar(
     tracks: list[Track],
-    current: int,
+    selected: int,
+    playing_track: Track | None,
     search: str,
     show_favorites: bool,
     total_count: int,
     on_search: Callable[[str], None],
     on_toggle_favorites: Callable[[bool], None],
     on_select: Callable[[Track], None],
+    on_play: Callable[[Track], None],
     on_favorite: Callable[[Track], None],
     is_playing: bool,
 ) -> ft.Control:
-    current_track = tracks[current] if 0 <= current < len(tracks) else None
+    selected_track = tracks[selected] if 0 <= selected < len(tracks) else None
 
     header = ft.Container(
         content=ft.Column(
@@ -258,9 +269,10 @@ def Sidebar(
                 PlaylistItem(
                     i,
                     t,
-                    t is current_track,
-                    is_playing and t is current_track,
+                    t is selected_track,
+                    is_playing and t is playing_track,
                     on_select,
+                    on_play,
                     on_favorite,
                 )
                 for i, t in enumerate(tracks)
