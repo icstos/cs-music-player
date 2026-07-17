@@ -46,6 +46,7 @@ def PlayerApp(page: ft.Page) -> ft.Control:
     player_ref = ft.use_ref(None)
     picker_ref = ft.use_ref(None)
     favorites_ref = ft.use_ref(set[str]())
+    search_focused_ref = ft.use_ref(False)
 
     def setup() -> None:
         player_ref.current = Player(
@@ -111,6 +112,19 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         if player_ref.current:
             await player_ref.current.toggle()
 
+    def bind_keyboard() -> None:
+        async def on_keyboard(e: ft.KeyboardEvent) -> None:
+            if e.key != " " or e.ctrl or e.alt or e.meta:
+                return
+            if search_focused_ref.current:
+                return
+            if player_ref.current:
+                await player_ref.current.toggle()
+
+        page.on_keyboard_event = on_keyboard
+
+    ft.use_effect(bind_keyboard, dependencies=[])
+
     async def on_next(e: ft.ControlEvent) -> None:
         if player_ref.current:
             await player_ref.current.next()
@@ -158,6 +172,12 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         if player_ref.current:
             await player_ref.current.seek(seconds)
             set_position(seconds)
+
+    def on_search_focus() -> None:
+        search_focused_ref.current = True
+
+    def on_search_blur() -> None:
+        search_focused_ref.current = False
 
     playing_track = tracks[current] if 0 <= current < len(tracks) else None
     display_index = current if current >= 0 else selected
@@ -252,6 +272,8 @@ def PlayerApp(page: ft.Page) -> ft.Control:
                             on_play,
                             on_favorite,
                             is_playing,
+                            on_search_focus,
+                            on_search_blur,
                         ),
                         MainStage(track, is_playing, lyrics, position, has_lyrics),
                     ],

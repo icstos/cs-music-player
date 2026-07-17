@@ -196,6 +196,8 @@ def Sidebar(
     on_play: Callable[[Track], None],
     on_favorite: Callable[[Track], None],
     is_playing: bool,
+    on_search_focus: Callable[[], None],
+    on_search_blur: Callable[[], None],
 ) -> ft.Control:
     selected_track = tracks[selected] if 0 <= selected < len(tracks) else None
 
@@ -216,6 +218,8 @@ def Sidebar(
                 ft.TextField(
                     value=search,
                     on_change=lambda e: on_search(str(e.control.value or "")),
+                    on_focus=lambda e: on_search_focus(),
+                    on_blur=lambda e: on_search_blur(),
                     hint_text="搜索歌曲或文件夹",
                     prefix_icon=ft.Icons.SEARCH,
                     border_radius=12,
