@@ -6,15 +6,29 @@ from pathlib import Path
 
 import flet as ft
 
-from .audio_player import Player, PlayerCallbacks, Track, load_tracks_from_directory
-from .constants import BG, PRIMARY, PRIMARY_DARK, SURFACE, TEXT_DIM, TEXT_MAIN, MODE_SEQUENCE
+from .audio_player import (
+    Player,
+    PlayerCallbacks,
+    Track,
+    load_tracks_from_directory,
+    resolve_startup_load,
+)
+from .constants import (
+    BG,
+    PRIMARY,
+    PRIMARY_DARK,
+    SURFACE,
+    TEXT_DIM,
+    TEXT_MAIN,
+    MODE_SEQUENCE,
+)
 from .lyrics import load_lyrics
 from .store import apply_favorites, load_favorites, save_favorites, track_key
 from .ui import MainStage, PlayerBar, Sidebar
 
 
 @ft.component
-def PlayerApp(page: ft.Page) -> ft.Control:
+def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     page.theme_mode = ft.ThemeMode.SYSTEM
     page.theme = ft.Theme(
         color_scheme_seed=PRIMARY,
@@ -65,6 +79,50 @@ def PlayerApp(page: ft.Page) -> ft.Control:
 
     ft.use_effect(setup, dependencies=[])
 
+    async def apply_tracks(
+        files: list[Track],
+        *,
+        play_index: int = 0,
+        autoplay: bool = False,
+    ) -> None:
+        favorites_ref.current = await load_favorites(page.shared_preferences)
+        apply_favorites(files, favorites_ref.current)
+        player = player_ref.current
+        if player:
+            player.set_tracks(files)
+            if autoplay and 0 <= play_index < len(files):
+                await player.play_at(play_index)
+        set_tracks(files)
+        set_selected(play_index if files else -1)
+        if autoplay and 0 <= play_index < len(files):
+            set_position(0.0)
+            set_duration(files[play_index].duration)
+            set_lyrics([])
+            return
+        set_current(-1)
+        set_position(0.0)
+        set_duration(files[play_index].duration if files else 0.0)
+        set_lyrics([])
+        set_is_playing(False)
+
+    def init_startup() -> None:
+        if not startup_path:
+            return
+
+        async def run() -> None:
+            load = resolve_startup_load(Path(startup_path))
+            if load is None:
+                return
+            await apply_tracks(
+                load.tracks,
+                play_index=load.play_index,
+                autoplay=load.autoplay,
+            )
+
+        page.run_task(run)
+
+    ft.use_effect(init_startup, dependencies=[])
+
     def refresh_lyrics() -> None:
         idx = current if current >= 0 else selected
         track = tracks[idx] if 0 <= idx < len(tracks) else None
@@ -95,18 +153,7 @@ def PlayerApp(page: ft.Page) -> ft.Control:
         files = load_tracks_from_directory(Path(directory))
         if not files:
             return
-        favorites_ref.current = await load_favorites(page.shared_preferences)
-        apply_favorites(files, favorites_ref.current)
-        player = player_ref.current
-        if player:
-            player.set_tracks(files)
-        set_tracks(files)
-        set_selected(0)
-        set_current(-1)
-        set_position(0.0)
-        set_duration(files[0].duration)
-        set_lyrics([])
-        set_is_playing(False)
+        await apply_tracks(files)
 
     async def on_toggle(e: ft.ControlEvent) -> None:
         if player_ref.current:
@@ -195,10 +242,14 @@ def PlayerApp(page: ft.Page) -> ft.Control:
             or search.lower() in t.path.parent.name.lower()
         )
     ]
-    filtered_selected = next(
-        (i for i, t in enumerate(filtered_tracks) if t is tracks[selected]),
-        -1,
-    ) if 0 <= selected < len(tracks) else -1
+    filtered_selected = (
+        next(
+            (i for i, t in enumerate(filtered_tracks) if t is tracks[selected]),
+            -1,
+        )
+        if 0 <= selected < len(tracks)
+        else -1
+    )
 
     toolbar = ft.Container(
         content=ft.Row(
@@ -206,7 +257,9 @@ def PlayerApp(page: ft.Page) -> ft.Control:
                 ft.Row(
                     [
                         ft.Container(
-                            content=ft.Icon(ft.Icons.LIBRARY_MUSIC, color=SURFACE, size=20),
+                            content=ft.Icon(
+                                ft.Icons.LIBRARY_MUSIC, color=SURFACE, size=20
+                            ),
                             width=36,
                             height=36,
                             alignment=ft.Alignment.CENTER,

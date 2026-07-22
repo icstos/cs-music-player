@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cs_music_player.audio_player import extract_cover_src, load_tracks_from_directory, Track
+from cs_music_player.audio_player import (
+    create_track,
+    extract_cover_src,
+    load_tracks_from_directory,
+    resolve_startup_load,
+    Track,
+)
+from cs_music_player.startup import parse_startup_path
 from cs_music_player.store import apply_favorites, track_key
 
 
@@ -39,6 +46,17 @@ def main() -> None:
     apply_favorites(tracks, set())
     assert tracks[0].favorite is False
     print("apply_favorites: ok")
+
+    assert parse_startup_path(["--web", "missing.mp3"]) is None
+    if mp3.exists():
+        assert parse_startup_path(["--web", str(mp3)]) == mp3.resolve()
+        load = resolve_startup_load(mp3)
+        assert load is not None
+        assert load.autoplay is True
+        assert load.tracks
+        assert load.tracks[load.play_index].path.resolve() == mp3.resolve()
+        print("startup load:", load.tracks[load.play_index].title)
+    print("startup helpers: ok")
 
 
 if __name__ == "__main__":

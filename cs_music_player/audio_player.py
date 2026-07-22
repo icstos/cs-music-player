@@ -113,6 +113,58 @@ def load_tracks_from_directory(directory: Path) -> list[Track]:
     ]
 
 
+def create_track(path: Path) -> Track | None:
+    """从单个音频文件创建 Track，格式不支持时返回 None。"""
+    resolved = path.resolve()
+    if not resolved.is_file() or resolved.suffix.lower() not in SUPPORTED_FORMATS:
+        return None
+    lyrics_index = build_lyrics_index(resolved.parent / "lyrics")
+    return Track(
+        path=resolved,
+        duration=get_track_duration(resolved),
+        lyrics_path=match_lyrics_path(lyrics_index, resolved.stem),
+        cover_src=extract_cover_src(resolved),
+    )
+
+
+@dataclass(frozen=True)
+class StartupLoad:
+    """启动时加载的曲目列表与播放目标。"""
+
+    tracks: list[Track]
+    play_index: int
+    autoplay: bool
+
+
+def resolve_startup_load(path: Path) -> StartupLoad | None:
+    """根据启动路径解析曲目：文件则加载同目录并播放该曲，目录则仅导入。"""
+    resolved = path.expanduser().resolve()
+    if resolved.is_dir():
+        tracks = load_tracks_from_directory(resolved)
+        if not tracks:
+            return None
+        return StartupLoad(tracks, 0, False)
+
+    track = create_track(resolved)
+    if track is None:
+        return None
+
+    tracks = load_tracks_from_directory(resolved.parent)
+    if not tracks:
+        return StartupLoad([track], 0, True)
+
+    play_index = next(
+        (i for i, item in enumerate(tracks) if item.path.resolve() == track.path.resolve()),
+        -1,
+    )
+    if play_index < 0:
+        tracks = sorted([*tracks, track], key=lambda item: item.path.name.lower())
+        play_index = next(
+            i for i, item in enumerate(tracks) if item.path.resolve() == track.path.resolve()
+        )
+    return StartupLoad(tracks, play_index, True)
+
+
 # ── 播放器 ── #
 
 

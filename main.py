@@ -4,6 +4,9 @@ import flet as ft
 
 from cs_music_player.app import PlayerApp
 from cs_music_player.constants import BG, PRIMARY
+from cs_music_player.startup import parse_startup_path
+
+STARTUP_PATH = parse_startup_path()
 
 
 def main(page: ft.Page) -> None:
@@ -18,7 +21,11 @@ def main(page: ft.Page) -> None:
     page.window.resizable = True
     page.window.maximizable = True
     page.padding = 0
-    page.render(PlayerApp, page)
+    page.render(
+        PlayerApp,
+        page,
+        str(STARTUP_PATH) if STARTUP_PATH else None,
+    )
 
 
 if __name__ == "__main__":
