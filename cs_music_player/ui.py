@@ -337,14 +337,19 @@ def ProgressBar(
     )
 
     if compact:
-        return ft.Row(
-            [
-                ft.Text(_fmt(position), size=11, color=TEXT_MUTED, width=36),
-                slider,
-                ft.Text(_fmt(duration), size=11, color=TEXT_MUTED, width=36, text_align=ft.TextAlign.RIGHT),
-            ],
-            spacing=8,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        return ft.Container(
+            content=ft.Row(
+                [
+                    ft.Text(_fmt(position), size=10, color=TEXT_MUTED, width=34),
+                    slider,
+                    ft.Text(_fmt(duration), size=10, color=TEXT_MUTED, width=34, text_align=ft.TextAlign.RIGHT),
+                ],
+                spacing=6,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.03, PRIMARY),
+            border_radius=12,
+            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
         )
 
     return ft.Column(
@@ -427,13 +432,19 @@ def PlayControls(
         )
     return ft.Row(
         [
-            ft.IconButton(
-                icon=MODE_ICONS[mode],
-                icon_color=PRIMARY if has_tracks else TEXT_MUTED,
-                icon_size=22,
-                tooltip=mode,
-                on_click=on_mode,
-                disabled=not has_tracks,
+            ft.Container(
+                content=ft.IconButton(
+                    icon=MODE_ICONS[mode],
+                    icon_color=PRIMARY if has_tracks else TEXT_MUTED,
+                    icon_size=20,
+                    tooltip=mode,
+                    on_click=on_mode,
+                    disabled=not has_tracks,
+                    style=ft.ButtonStyle(padding=ft.Padding.all(4)),
+                ),
+                bgcolor=ft.Colors.with_opacity(0.04, PRIMARY),
+                border_radius=10,
+                padding=ft.Padding.all(2),
             ),
             ft.IconButton(
                 icon=ft.Icons.SKIP_PREVIOUS_ROUNDED,
@@ -442,6 +453,7 @@ def PlayControls(
                 tooltip="上一曲",
                 on_click=on_prev,
                 disabled=not has_tracks,
+                style=ft.ButtonStyle(padding=ft.Padding.all(4)),
             ),
             ft.Container(
                 content=play_icon_control,
@@ -466,6 +478,7 @@ def PlayControls(
                 tooltip="下一曲",
                 on_click=on_next,
                 disabled=not has_tracks,
+                style=ft.ButtonStyle(padding=ft.Padding.all(4)),
             ),
         ],
         alignment=ft.MainAxisAlignment.CENTER,
@@ -496,45 +509,49 @@ def PlayerBar(
     subtitle = "导入音乐文件夹开始播放" if track is None else track.path.parent.name
 
     return ft.Container(
-        content=ft.Column(
+        content=ft.Row(
             [
-                ProgressBar(position, duration, dragging, on_seek, compact=True),
                 ft.Row(
                     [
-                        ft.Row(
+                        _track_cover(
+                            track,
+                            size=46,
+                            is_playing=is_playing,
+                            letter_fallback=True,
+                        ),
+                        ft.Column(
                             [
-                                _track_cover(
-                                    track,
-                                    size=52,
-                                    is_playing=is_playing,
-                                    letter_fallback=True,
+                                ft.Text(
+                                    title,
+                                    size=13,
+                                    weight=ft.FontWeight.W_600,
+                                    color=TEXT_MAIN,
+                                    max_lines=1,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
                                 ),
-                                ft.Column(
-                                    [
-                                        ft.Text(
-                                            title,
-                                            size=14,
-                                            weight=ft.FontWeight.W_600,
-                                            color=TEXT_MAIN,
-                                            max_lines=1,
-                                            overflow=ft.TextOverflow.ELLIPSIS,
-                                        ),
-                                        ft.Text(
-                                            subtitle,
-                                            size=11,
-                                            color=TEXT_MUTED,
-                                            max_lines=1,
-                                            overflow=ft.TextOverflow.ELLIPSIS,
-                                        ),
-                                    ],
-                                    spacing=2,
-                                    alignment=ft.MainAxisAlignment.CENTER,
+                                ft.Text(
+                                    subtitle,
+                                    size=10,
+                                    color=TEXT_MUTED,
+                                    max_lines=1,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
                                 ),
                             ],
-                            spacing=12,
-                            width=280,
+                            spacing=2,
+                            alignment=ft.MainAxisAlignment.CENTER,
                         ),
-                        ft.Container(expand=True),
+                    ],
+                    spacing=10,
+                    width=260,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                ft.Container(
+                    content=ProgressBar(position, duration, dragging, on_seek, compact=True),
+                    expand=True,
+                    margin=ft.Margin.only(left=8, right=8),
+                ),
+                ft.Row(
+                    [
                         PlayControls(
                             is_playing,
                             mode,
@@ -545,13 +562,15 @@ def PlayerBar(
                             on_mode,
                             compact=True,
                         ),
-                        ft.Container(expand=True),
+                        ft.Container(width=6),
                         VolumeControl(volume, on_volume, compact=True),
                     ],
+                    spacing=6,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
             ],
-            spacing=6,
+            spacing=12,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
         bgcolor=SURFACE,
         border=ft.Border(top=ft.BorderSide(1, BORDER)),
