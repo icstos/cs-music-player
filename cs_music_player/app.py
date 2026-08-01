@@ -15,12 +15,12 @@ from .audio_player import (
 )
 from .constants import (
     BG,
+    MODE_SEQUENCE,
     PRIMARY,
     PRIMARY_DARK,
     SURFACE,
     TEXT_DIM,
     TEXT_MAIN,
-    MODE_SEQUENCE,
 )
 from .lyrics import load_lyrics
 from .store import apply_favorites, load_favorites, save_favorites, track_key
@@ -62,13 +62,17 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     favorites_ref = ft.use_ref(set[str]())
     search_focused_ref = ft.use_ref(False)
 
+    def sync_track_state(index: int) -> None:
+        set_current(index)
+        set_selected(index)
+
     def setup() -> None:
         player_ref.current = Player(
             PlayerCallbacks(
                 on_position=set_position,
                 on_duration=set_duration,
                 on_play_state=set_is_playing,
-                on_track_change=set_current,
+                on_track_change=sync_track_state,
             ),
             page,
         )
@@ -194,7 +198,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
             index = tracks.index(track)
         except ValueError:
             return
-        set_selected(index)
+        sync_track_state(index)
 
     async def on_play(track: Track) -> None:
         try:
@@ -203,7 +207,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
             return
         if player_ref.current:
             await player_ref.current.play_at(index)
-        set_selected(index)
+        sync_track_state(index)
 
     async def on_favorite(track: Track) -> None:
         key = track_key(track.path)

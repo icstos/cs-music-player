@@ -6,11 +6,13 @@ from collections.abc import Callable
 
 import flet as ft
 
+from .audio_player import Track
 from .constants import (
     ACCENT,
     ACCENT_TINT_10,
     BG,
     BORDER,
+    MODE_ICONS,
     PRIMARY,
     PRIMARY_BG,
     PRIMARY_LIGHT,
@@ -21,9 +23,7 @@ from .constants import (
     TEXT_DIM,
     TEXT_MAIN,
     TEXT_MUTED,
-    MODE_ICONS,
 )
-from .audio_player import Track
 from .lyrics import LyricLine, current_line_index
 
 
@@ -33,6 +33,16 @@ def _fmt(seconds: float) -> str:
         return "0:00"
     m, s = divmod(int(seconds), 60)
     return f"{m}:{s:02d}"
+
+
+def _clamp_progress_value(value: float, duration: float) -> float:
+    """将播放进度限制在 Slider 合法范围内，避免浮点误差导致越界。"""
+    if duration <= 0:
+        return 0.0
+    ratio = value / duration
+    if ratio != ratio:
+        return 0.0
+    return max(0.0, min(1.0, ratio))
 
 
 def _track_cover(
@@ -130,13 +140,17 @@ def PlaylistItem(
                     width=28,
                     text_align=ft.TextAlign.CENTER,
                 ),
-                _track_cover(track, size=40, is_current=is_selected, is_playing=is_playing),
+                _track_cover(
+                    track, size=40, is_current=is_selected, is_playing=is_playing
+                ),
                 ft.Column(
                     [
                         ft.Text(
                             track.title,
                             size=13,
-                            weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.W_500,
+                            weight=ft.FontWeight.W_600
+                            if is_selected
+                            else ft.FontWeight.W_500,
                             color=TEXT_MAIN if is_selected else TEXT_DIM,
                             max_lines=1,
                             overflow=ft.TextOverflow.ELLIPSIS,
@@ -153,7 +167,9 @@ def PlaylistItem(
                     expand=True,
                 ),
                 ft.IconButton(
-                    icon=ft.Icons.FAVORITE if track.favorite else ft.Icons.FAVORITE_BORDER,
+                    icon=ft.Icons.FAVORITE
+                    if track.favorite
+                    else ft.Icons.FAVORITE_BORDER,
                     icon_color=PRIMARY_LIGHT if track.favorite else TEXT_MUTED,
                     icon_size=18,
                     tooltip="取消收藏" if track.favorite else "收藏",
@@ -206,7 +222,12 @@ def Sidebar(
             [
                 ft.Row(
                     [
-                        ft.Text("音乐库", size=16, weight=ft.FontWeight.W_700, color=TEXT_MAIN),
+                        ft.Text(
+                            "音乐库",
+                            size=16,
+                            weight=ft.FontWeight.W_700,
+                            color=TEXT_MAIN,
+                        ),
                         ft.Container(expand=True),
                         ft.Text(
                             f"{len(tracks)} / {total_count} 首",
@@ -257,8 +278,15 @@ def Sidebar(
             content=ft.Column(
                 [
                     ft.Icon(ft.Icons.LIBRARY_MUSIC_OUTLINED, size=48, color=TEXT_MUTED),
-                    ft.Text("暂无歌曲", size=14, weight=ft.FontWeight.W_600, color=TEXT_DIM),
-                    ft.Text("点击右上角导入音乐文件夹", size=12, color=TEXT_MUTED, text_align=ft.TextAlign.CENTER),
+                    ft.Text(
+                        "暂无歌曲", size=14, weight=ft.FontWeight.W_600, color=TEXT_DIM
+                    ),
+                    ft.Text(
+                        "点击右上角导入音乐文件夹",
+                        size=12,
+                        color=TEXT_MUTED,
+                        text_align=ft.TextAlign.CENTER,
+                    ),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=8,
@@ -319,9 +347,7 @@ def ProgressBar(
         dragging.current = False
 
     value = (
-        local_value
-        if dragging.current
-        else (position / duration if duration > 0 else 0.0)
+        local_value if dragging.current else _clamp_progress_value(position, duration)
     )
 
     slider = ft.Slider(
@@ -342,7 +368,13 @@ def ProgressBar(
                 [
                     ft.Text(_fmt(position), size=10, color=TEXT_MUTED, width=34),
                     slider,
-                    ft.Text(_fmt(duration), size=10, color=TEXT_MUTED, width=34, text_align=ft.TextAlign.RIGHT),
+                    ft.Text(
+                        _fmt(duration),
+                        size=10,
+                        color=TEXT_MUTED,
+                        width=34,
+                        text_align=ft.TextAlign.RIGHT,
+                    ),
                 ],
                 spacing=6,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -371,7 +403,9 @@ def ProgressBar(
 
 
 @ft.component
-def VolumeControl(volume: float, on_change: Callable[[float], None], *, compact: bool = False) -> ft.Control:
+def VolumeControl(
+    volume: float, on_change: Callable[[float], None], *, compact: bool = False
+) -> ft.Control:
     icon = (
         ft.Icons.VOLUME_MUTE
         if volume == 0
@@ -424,7 +458,9 @@ def PlayControls(
     skip_size = 28 if compact else 32
     play_icon_size = 26 if compact else 30
     play_icon = ft.Icons.PAUSE_ROUNDED if is_playing else ft.Icons.PLAY_ARROW_ROUNDED
-    play_icon_control: ft.Control = ft.Icon(play_icon, color=SURFACE, size=play_icon_size)
+    play_icon_control: ft.Control = ft.Icon(
+        play_icon, color=SURFACE, size=play_icon_size
+    )
     if not is_playing:
         play_icon_control = ft.Container(
             content=play_icon_control,
@@ -469,7 +505,9 @@ def PlayControls(
                     blur_radius=12,
                     color=ft.Colors.with_opacity(0.2, PRIMARY),
                     offset=ft.Offset(0, 4),
-                ) if has_tracks else None,
+                )
+                if has_tracks
+                else None,
             ),
             ft.IconButton(
                 icon=ft.Icons.SKIP_NEXT_ROUNDED,
@@ -546,7 +584,9 @@ def PlayerBar(
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 ft.Container(
-                    content=ProgressBar(position, duration, dragging, on_seek, compact=True),
+                    content=ProgressBar(
+                        position, duration, dragging, on_seek, compact=True
+                    ),
                     expand=True,
                     margin=ft.Margin.only(left=8, right=8),
                 ),
@@ -639,8 +679,7 @@ def LyricsPanel(
         body = ft.Container(
             content=ft.Column(
                 controls=[
-                    LyricsLine(line.text, i == active)
-                    for i, line in enumerate(lines)
+                    LyricsLine(line.text, i == active) for i, line in enumerate(lines)
                 ],
                 spacing=2,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
