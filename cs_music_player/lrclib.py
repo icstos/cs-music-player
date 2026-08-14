@@ -18,6 +18,21 @@ REQUEST_INTERVAL = 0.3  # LRCLIB 建议请求间隔 200–500ms
 
 _last_request_at = 0.0
 
+# 简体/繁体特有的常用汉字，用于粗略判断歌词用字风格。
+# _SIMPLIFIED_ONLY：只出现在简体文中的字形；_TRADITIONAL_ONLY：只出现在繁体文中的对应字形。
+_SIMPLIFIED_ONLY = frozenset(
+    "从这们时样来对还说会点么着过风发爱离开间问儿车长东边学书"
+    "听见体师应当让动环红绿结给经虽难亲买卖岁进张几画灯连湾单双"
+    "头块蓝号龙飞马鸟鱼机觉变关门兴乡战执专传伟伤价优语请认设许论"
+    "证评识词误讲计记议译训让买宝剑电饭锅运烦帘历"
+)
+_TRADITIONAL_ONLY = frozenset(
+    "從這們時樣來對還說會點麼著過風發愛離開間問兒車長東邊學書"
+    "聽聞見體師應當讓動環紅綠結給經雖難親買賣歲進張幾畫燈連灣單雙"
+    "頭塊藍號龍飛馬鳥魚機覺變關門興鄉戰執專傳偉傷價優語請認設許論"
+    "證評識詞誤講計記議譯訓讓買寶劍電飯鍋運煩簾歷"
+)
+
 
 def _acquire_lock() -> asyncio.Lock:
     """延迟创建全局请求锁，避免在模块导入时绑定事件循环。"""
@@ -94,8 +109,35 @@ async def _throttled_request(url: str) -> dict | list | None:
         return result
 
 
-def pick_best(records: list[dict], title: str, artist: str) -> dict | None:
-    """从搜索结果中挑选最匹配的歌词记录。"""
+def detect_hanzi_style(text: str) -> str | None:
+    """粗略判断文本用字风格：'simplified' / 'traditional' / None（无法判断）。"""
+    if not text:
+        return None
+    simp = sum(1 for ch in text if ch in _SIMPLIFIED_ONLY)
+    trad = sum(1 for ch in text if ch in _TRADITIONAL_ONLY)
+    if simp > trad:
+        return "simplified"
+    if trad > simp:
+        return "traditional"
+    return None
+
+
+def record_hanzi_style(record: dict) -> str | None:
+    """根据记录中的歌词文本判断简繁风格。"""
+    for field in ("syncedLyrics", "plainLyrics"):
+        style = detect_hanzi_style(record.get(field) or "")
+        if style is not None:
+            return style
+    return None
+
+
+def pick_best(
+    records: list[dict],
+    title: str,
+    artist: str,
+    duration: float = 0.0,
+) -> dict | None:
+    """从搜索结果中挑选最匹配的歌词记录（优先简体中文）。"""
 
     def score(rec: dict) -> float:
         name = (rec.get("trackName") or "").strip()
@@ -117,6 +159,15 @@ def pick_best(records: list[dict], title: str, artist: str) -> dict | None:
                 s += 2.0
             elif low_a in low_art or low_art in low_a:
                 s += 0.5
+        if duration > 0:
+            rec_dur = rec.get("duration")
+            if isinstance(rec_dur, (int, float)) and abs(float(rec_dur) - duration) <= 2.0:
+                s += 2.0
+        style = record_hanzi_style(rec)
+        if style == "simplified":
+            s += 3.0
+        elif style == "traditional":
+            s -= 2.0
         return s
 
     return max(records, key=score, default=None)
@@ -135,21 +186,37 @@ def _query_params(track: Track) -> dict[str, str]:
 
 
 async def fetch_lyrics(track: Track) -> dict | None:
-    """查询 LRCLIB：先按签名精确匹配，失败后回退到搜索。"""
+    """查询 LRCLIB：优先简体中文，先按签名精确匹配，再回退到搜索。"""
     params = _query_params(track)
-    data = await _throttled_request(
-        f"{LRCLIB_API}/get?" + urllib.parse.urlencode(params)
+    get_url = f"{LRCLIB_API}/get?" + urllib.parse.urlencode(params)
+    get_data = await _throttled_request(get_url)
+    get_hit = (
+        isinstance(get_data, dict)
+        and get_data.get("id")
+        and bool(get_data.get("syncedLyrics"))
     )
-    if isinstance(data, dict) and data.get("id") and data.get("syncedLyrics"):
-        return data
+    if get_hit and record_hanzi_style(get_data) != "traditional":
+        return get_data
 
     search_params = {k: v for k, v in params.items() if k != "duration"}
-    data = await _throttled_request(
+    search_data = await _throttled_request(
         f"{LRCLIB_API}/search?" + urllib.parse.urlencode(search_params)
     )
-    if isinstance(data, list) and data:
-        return pick_best(data, params["track_name"], params.get("artist_name", ""))
-    return None
+    candidates = list(search_data) if isinstance(search_data, list) else []
+    if get_hit:
+        candidates.append(get_data)
+    if not candidates:
+        return None
+    try:
+        duration = float(params.get("duration", 0.0))
+    except ValueError:
+        duration = 0.0
+    return pick_best(
+        candidates,
+        params["track_name"],
+        params.get("artist_name", ""),
+        duration,
+    )
 
 
 async def download_lyrics(track: Track) -> Path | None:
