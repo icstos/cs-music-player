@@ -307,7 +307,8 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
             index = tracks.index(track)
         except ValueError:
             return
-        sync_track_state(index)
+        # 仅更新选中项，不改变正在播放的曲目
+        set_selected(index)
 
     async def on_play(track: Track) -> None:
         try:
@@ -316,7 +317,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
             return
         if player_ref.current:
             await player_ref.current.play_at(index)
-        sync_track_state(index)
+        # play_at 内部已通过 on_track_change 同步 current/selected
 
     async def on_favorite(track: Track) -> None:
         key = track_key(track.path)
