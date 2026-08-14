@@ -9,6 +9,7 @@ from .audio_player import Track
 FAVORITES_KEY = "favorite_tracks"
 RECENT_FOLDERS_KEY = "recent_folders"
 PINNED_FOLDERS_KEY = "pinned_folders"
+THEME_MODE_KEY = "theme_mode"
 MAX_RECENT_FOLDERS = 8
 
 
@@ -79,3 +80,17 @@ def toggle_pinned_folder(folders: set[str], folder: str) -> set[str]:
     else:
         updated.add(resolved)
     return updated
+
+
+THEME_MODE_VALUES = ("light", "dark", "system")
+
+
+async def load_theme_mode(prefs) -> str:
+    """读取主题模式，非法值回退为跟随系统。"""
+    raw = await prefs.get(THEME_MODE_KEY)
+    return raw if raw in THEME_MODE_VALUES else "system"
+
+
+async def save_theme_mode(prefs, mode: str) -> None:
+    if mode in THEME_MODE_VALUES:
+        await prefs.set(THEME_MODE_KEY, mode)

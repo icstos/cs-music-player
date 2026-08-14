@@ -3,7 +3,7 @@
 import flet as ft
 
 from cs_music_player.app import PlayerApp
-from cs_music_player.constants import BG, PRIMARY
+from cs_music_player.constants import build_dark_theme, build_light_theme, palette
 from cs_music_player.startup import parse_startup_path
 
 STARTUP_PATH = parse_startup_path()
@@ -12,8 +12,9 @@ STARTUP_PATH = parse_startup_path()
 def main(page: ft.Page) -> None:
     page.title = "CS 音乐播放器"
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.theme = ft.Theme(color_scheme_seed=PRIMARY)
-    page.bgcolor = BG
+    page.theme = build_light_theme()
+    page.dark_theme = build_dark_theme()
+    page.bgcolor = palette.BG
     page.window.min_width = 900
     page.window.min_height = 640
     page.window.width = 1180

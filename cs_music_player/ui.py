@@ -7,23 +7,7 @@ from collections.abc import Callable
 import flet as ft
 
 from .audio_player import Track
-from .constants import (
-    ACCENT,
-    ACCENT_TINT_10,
-    BG,
-    BORDER,
-    MODE_ICONS,
-    PRIMARY,
-    PRIMARY_BG,
-    PRIMARY_LIGHT,
-    PRIMARY_TINT_08,
-    PRIMARY_TINT_12,
-    SURFACE,
-    SURFACE_SOFT,
-    TEXT_DIM,
-    TEXT_MAIN,
-    TEXT_MUTED,
-)
+from .constants import MODE_ICONS, palette
 from .lyrics import LyricLine, current_line_index
 
 
@@ -68,7 +52,7 @@ def _track_cover(
                         letter,
                         size=max(14, size // 2),
                         weight=ft.FontWeight.W_700,
-                        color=SURFACE,
+                        color=palette.SURFACE,
                     ),
                     alignment=ft.Alignment.CENTER,
                 ),
@@ -85,25 +69,25 @@ def _track_cover(
                 letter,
                 size=max(14, size // 2),
                 weight=ft.FontWeight.W_700,
-                color=SURFACE,
+                color=palette.SURFACE,
             ),
             width=size,
             height=size,
             alignment=ft.Alignment.CENTER,
-            bgcolor=ACCENT if is_playing else PRIMARY,
+            bgcolor=palette.ACCENT if is_playing else palette.PRIMARY,
             border_radius=max(8, size // 8),
         )
 
     return ft.Container(
         content=ft.Icon(
             ft.Icons.GRAPHIC_EQ if is_current and is_playing else ft.Icons.MUSIC_NOTE,
-            color=PRIMARY if is_current else TEXT_MUTED,
+            color=palette.PRIMARY if is_current else palette.TEXT_MUTED,
             size=max(16, size // 2),
         ),
         width=size,
         height=size,
         alignment=ft.Alignment.CENTER,
-        bgcolor=PRIMARY_TINT_12 if is_current else SURFACE_SOFT,
+        bgcolor=palette.PRIMARY_TINT_12 if is_current else palette.SURFACE_SOFT,
         border_radius=max(8, size // 8),
     )
 
@@ -136,7 +120,7 @@ def PlaylistItem(
                 ft.Text(
                     f"{index + 1:02d}",
                     size=12,
-                    color=PRIMARY_LIGHT if is_selected else TEXT_MUTED,
+                    color=palette.PRIMARY_LIGHT if is_selected else palette.TEXT_MUTED,
                     width=28,
                     text_align=ft.TextAlign.CENTER,
                 ),
@@ -151,7 +135,7 @@ def PlaylistItem(
                             weight=ft.FontWeight.W_600
                             if is_selected
                             else ft.FontWeight.W_500,
-                            color=TEXT_MAIN if is_selected else TEXT_DIM,
+                            color=palette.TEXT_MAIN if is_selected else palette.TEXT_DIM,
                             max_lines=1,
                             overflow=ft.TextOverflow.ELLIPSIS,
                         ),
@@ -160,7 +144,7 @@ def PlaylistItem(
                                 ft.Text(
                                     track.artist or track.path.parent.name,
                                     size=11,
-                                    color=TEXT_MUTED,
+                                    color=palette.TEXT_MUTED,
                                     max_lines=1,
                                     overflow=ft.TextOverflow.ELLIPSIS,
                                     expand=True,
@@ -168,7 +152,7 @@ def PlaylistItem(
                                 ft.Text(
                                     _fmt(track.duration),
                                     size=11,
-                                    color=TEXT_MUTED,
+                                    color=palette.TEXT_MUTED,
                                     text_align=ft.TextAlign.RIGHT,
                                 ),
                             ],
@@ -183,22 +167,22 @@ def PlaylistItem(
                     icon=ft.Icons.FAVORITE
                     if track.favorite
                     else ft.Icons.FAVORITE_BORDER,
-                    icon_color=PRIMARY_LIGHT if track.favorite else TEXT_MUTED,
+                    icon_color=palette.PRIMARY_LIGHT if track.favorite else palette.TEXT_MUTED,
                     icon_size=18,
                     tooltip="取消收藏" if track.favorite else "收藏",
                     on_click=_on_favorite,
                     style=ft.ButtonStyle(
                         padding=ft.Padding.all(4),
-                        overlay_color=ft.Colors.with_opacity(0.06, PRIMARY),
+                        overlay_color=ft.Colors.with_opacity(0.06, palette.PRIMARY),
                     ),
                 ),
             ],
             spacing=10,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        bgcolor=PRIMARY_BG if is_selected else ft.Colors.TRANSPARENT,
+        bgcolor=palette.PRIMARY_BG if is_selected else ft.Colors.TRANSPARENT,
         border=ft.Border(
-            left=ft.BorderSide(3, PRIMARY if is_selected else ft.Colors.TRANSPARENT),
+            left=ft.BorderSide(3, palette.PRIMARY if is_selected else ft.Colors.TRANSPARENT),
         ),
         padding=ft.Padding.only(left=8, right=8, top=6, bottom=6),
         ink=True,
@@ -239,13 +223,13 @@ def Sidebar(
                             "音乐库",
                             size=16,
                             weight=ft.FontWeight.W_700,
-                            color=TEXT_MAIN,
+                            color=palette.TEXT_MAIN,
                         ),
                         ft.Container(expand=True),
                         ft.Text(
                             f"{len(tracks)} / {total_count} 首",
                             size=11,
-                            color=TEXT_MUTED,
+                            color=palette.TEXT_MUTED,
                         ),
                     ],
                 ),
@@ -259,9 +243,9 @@ def Sidebar(
                     border_radius=12,
                     dense=True,
                     content_padding=ft.Padding.symmetric(horizontal=12, vertical=10),
-                    border_color=BORDER,
-                    focused_border_color=PRIMARY_LIGHT,
-                    bgcolor=SURFACE,
+                    border_color=palette.BORDER,
+                    focused_border_color=palette.PRIMARY_LIGHT,
+                    bgcolor=palette.SURFACE,
                 ),
                 ft.Row(
                     [
@@ -283,21 +267,21 @@ def Sidebar(
             spacing=10,
         ),
         padding=ft.Padding.only(left=16, right=16, top=16, bottom=12),
-        border=ft.Border(bottom=ft.BorderSide(1, BORDER)),
+        border=ft.Border(bottom=ft.BorderSide(1, palette.BORDER)),
     )
 
     if not tracks:
         body = ft.Container(
             content=ft.Column(
                 [
-                    ft.Icon(ft.Icons.LIBRARY_MUSIC_OUTLINED, size=48, color=TEXT_MUTED),
+                    ft.Icon(ft.Icons.LIBRARY_MUSIC_OUTLINED, size=48, color=palette.TEXT_MUTED),
                     ft.Text(
-                        "暂无歌曲", size=14, weight=ft.FontWeight.W_600, color=TEXT_DIM
+                        "暂无歌曲", size=14, weight=ft.FontWeight.W_600, color=palette.TEXT_DIM
                     ),
                     ft.Text(
                         "点击右上角导入音乐文件夹",
                         size=12,
-                        color=TEXT_MUTED,
+                        color=palette.TEXT_MUTED,
                         text_align=ft.TextAlign.CENTER,
                     ),
                 ],
@@ -330,8 +314,8 @@ def Sidebar(
     return ft.Container(
         content=ft.Column([header, body], spacing=0, expand=True),
         width=340,
-        bgcolor=SURFACE,
-        border=ft.Border(right=ft.BorderSide(1, BORDER)),
+        bgcolor=palette.SURFACE,
+        border=ft.Border(right=ft.BorderSide(1, palette.BORDER)),
         expand=False,
     )
 
@@ -367,9 +351,9 @@ def ProgressBar(
         min=0,
         max=1,
         value=value,
-        active_color=PRIMARY,
-        inactive_color=BORDER,
-        thumb_color=PRIMARY_LIGHT,
+        active_color=palette.PRIMARY,
+        inactive_color=palette.BORDER,
+        thumb_color=palette.PRIMARY_LIGHT,
         on_change=on_change,
         on_change_end=on_change_end,
         expand=True,
@@ -379,12 +363,12 @@ def ProgressBar(
         return ft.Container(
             content=ft.Row(
                 [
-                    ft.Text(_fmt(position), size=10, color=TEXT_MUTED, width=34),
+                    ft.Text(_fmt(position), size=10, color=palette.TEXT_MUTED, width=34),
                     slider,
                     ft.Text(
                         _fmt(duration),
                         size=10,
-                        color=TEXT_MUTED,
+                        color=palette.TEXT_MUTED,
                         width=34,
                         text_align=ft.TextAlign.RIGHT,
                     ),
@@ -392,7 +376,7 @@ def ProgressBar(
                 spacing=6,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            bgcolor=ft.Colors.with_opacity(0.03, PRIMARY),
+            bgcolor=ft.Colors.with_opacity(0.03, palette.PRIMARY),
             border_radius=12,
             padding=ft.Padding.symmetric(horizontal=8, vertical=4),
         )
@@ -402,9 +386,9 @@ def ProgressBar(
             slider,
             ft.Row(
                 [
-                    ft.Text(_fmt(position), size=11, color=TEXT_MUTED),
+                    ft.Text(_fmt(position), size=11, color=palette.TEXT_MUTED),
                     ft.Container(expand=True),
-                    ft.Text(_fmt(duration), size=11, color=TEXT_MUTED),
+                    ft.Text(_fmt(duration), size=11, color=palette.TEXT_MUTED),
                 ]
             ),
         ],
@@ -431,7 +415,7 @@ def VolumeControl(
         [
             ft.IconButton(
                 icon=icon,
-                icon_color=TEXT_DIM,
+                icon_color=palette.TEXT_DIM,
                 icon_size=20,
                 tooltip="音量",
                 style=ft.ButtonStyle(padding=ft.Padding.all(4)),
@@ -440,9 +424,9 @@ def VolumeControl(
                 min=0,
                 max=1,
                 value=volume,
-                active_color=PRIMARY,
-                inactive_color=BORDER,
-                thumb_color=PRIMARY_LIGHT,
+                active_color=palette.PRIMARY,
+                inactive_color=palette.BORDER,
+                thumb_color=palette.PRIMARY_LIGHT,
                 on_change=lambda e: on_change(float(e.control.value)),
                 width=slider_width,
             ),
@@ -472,7 +456,7 @@ def PlayControls(
     play_icon_size = 26 if compact else 30
     play_icon = ft.Icons.PAUSE_ROUNDED if is_playing else ft.Icons.PLAY_ARROW_ROUNDED
     play_icon_control: ft.Control = ft.Icon(
-        play_icon, color=SURFACE, size=play_icon_size
+        play_icon, color=palette.SURFACE, size=play_icon_size
     )
     if not is_playing:
         play_icon_control = ft.Container(
@@ -484,20 +468,20 @@ def PlayControls(
             ft.Container(
                 content=ft.IconButton(
                     icon=MODE_ICONS[mode],
-                    icon_color=PRIMARY if has_tracks else TEXT_MUTED,
+                    icon_color=palette.PRIMARY if has_tracks else palette.TEXT_MUTED,
                     icon_size=20,
                     tooltip=mode,
                     on_click=on_mode,
                     disabled=not has_tracks,
                     style=ft.ButtonStyle(padding=ft.Padding.all(4)),
                 ),
-                bgcolor=ft.Colors.with_opacity(0.04, PRIMARY),
+                bgcolor=ft.Colors.with_opacity(0.04, palette.PRIMARY),
                 border_radius=10,
                 padding=ft.Padding.all(2),
             ),
             ft.IconButton(
                 icon=ft.Icons.SKIP_PREVIOUS_ROUNDED,
-                icon_color=TEXT_MAIN if has_tracks else TEXT_MUTED,
+                icon_color=palette.TEXT_MAIN if has_tracks else palette.TEXT_MUTED,
                 icon_size=skip_size,
                 tooltip="上一曲",
                 on_click=on_prev,
@@ -509,14 +493,14 @@ def PlayControls(
                 width=play_size,
                 height=play_size,
                 alignment=ft.Alignment.CENTER,
-                bgcolor=PRIMARY if has_tracks else TEXT_MUTED,
+                bgcolor=palette.PRIMARY if has_tracks else palette.TEXT_MUTED,
                 border_radius=play_size // 2,
                 on_click=on_toggle if has_tracks else None,
                 ink=True,
                 shadow=ft.BoxShadow(
                     spread_radius=0,
                     blur_radius=12,
-                    color=ft.Colors.with_opacity(0.2, PRIMARY),
+                    color=ft.Colors.with_opacity(0.2, palette.PRIMARY),
                     offset=ft.Offset(0, 4),
                 )
                 if has_tracks
@@ -524,7 +508,7 @@ def PlayControls(
             ),
             ft.IconButton(
                 icon=ft.Icons.SKIP_NEXT_ROUNDED,
-                icon_color=TEXT_MAIN if has_tracks else TEXT_MUTED,
+                icon_color=palette.TEXT_MAIN if has_tracks else palette.TEXT_MUTED,
                 icon_size=skip_size,
                 tooltip="下一曲",
                 on_click=on_next,
@@ -576,14 +560,14 @@ def PlayerBar(
                                     title,
                                     size=13,
                                     weight=ft.FontWeight.W_600,
-                                    color=TEXT_MAIN,
+                                    color=palette.TEXT_MAIN,
                                     max_lines=1,
                                     overflow=ft.TextOverflow.ELLIPSIS,
                                 ),
                                 ft.Text(
                                     subtitle,
                                     size=10,
-                                    color=TEXT_MUTED,
+                                    color=palette.TEXT_MUTED,
                                     max_lines=1,
                                     overflow=ft.TextOverflow.ELLIPSIS,
                                 ),
@@ -625,13 +609,13 @@ def PlayerBar(
             spacing=12,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        bgcolor=SURFACE,
-        border=ft.Border(top=ft.BorderSide(1, BORDER)),
+        bgcolor=palette.SURFACE,
+        border=ft.Border(top=ft.BorderSide(1, palette.BORDER)),
         padding=ft.Padding.symmetric(horizontal=20, vertical=10),
         shadow=ft.BoxShadow(
             spread_radius=0,
             blur_radius=16,
-            color=ft.Colors.with_opacity(0.04, "#0f172a"),
+            color=ft.Colors.with_opacity(0.04, palette.TEXT_MAIN),
             offset=ft.Offset(0, -4),
         ),
     )
@@ -650,7 +634,7 @@ def LyricsLine(
             text,
             size=18 if is_current else 15,
             weight=ft.FontWeight.W_700 if is_current else ft.FontWeight.NORMAL,
-            color=PRIMARY if is_current else TEXT_MUTED,
+            color=palette.PRIMARY if is_current else palette.TEXT_MUTED,
             text_align=ft.TextAlign.CENTER,
             max_lines=2,
             overflow=ft.TextOverflow.ELLIPSIS,
@@ -672,8 +656,8 @@ def LyricsPanel(
         body = ft.Container(
             content=ft.Column(
                 [
-                    ft.Icon(ft.Icons.SUBTITLES_OUTLINED, size=36, color=TEXT_MUTED),
-                    ft.Text("暂无歌词", size=13, color=TEXT_DIM),
+                    ft.Icon(ft.Icons.SUBTITLES_OUTLINED, size=36, color=palette.TEXT_MUTED),
+                    ft.Text("暂无歌词", size=13, color=palette.TEXT_DIM),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=8,
@@ -684,7 +668,7 @@ def LyricsPanel(
         )
     elif not lines:
         body = ft.Container(
-            content=ft.Text("歌词文件无法解析", size=13, color=TEXT_DIM),
+            content=ft.Text("歌词文件无法解析", size=13, color=palette.TEXT_DIM),
             expand=True,
             alignment=ft.Alignment.CENTER,
         )
@@ -730,7 +714,7 @@ def MainStage(
         shadow=ft.BoxShadow(
             spread_radius=0,
             blur_radius=32,
-            color=ft.Colors.with_opacity(0.15, "#0f172a"),
+            color=ft.Colors.with_opacity(0.15, palette.TEXT_MAIN),
             offset=ft.Offset(0, 12),
         ),
         animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
@@ -742,10 +726,10 @@ def MainStage(
                 [
                     cover,
                     ft.Container(
-                        content=ft.Icon(ft.Icons.GRAPHIC_EQ, color=ACCENT, size=20),
+                        content=ft.Icon(ft.Icons.GRAPHIC_EQ, color=palette.ACCENT, size=20),
                         alignment=ft.Alignment(1, -1),
                         margin=ft.Margin.only(top=8, right=8),
-                        bgcolor=ACCENT_TINT_10,
+                        bgcolor=palette.ACCENT_TINT_10,
                         border_radius=20,
                         padding=ft.Padding.all(6),
                     ),
@@ -765,7 +749,7 @@ def MainStage(
                                 title,
                                 size=22,
                                 weight=ft.FontWeight.W_700,
-                                color=TEXT_MAIN,
+                                color=palette.TEXT_MAIN,
                                 max_lines=1,
                                 overflow=ft.TextOverflow.ELLIPSIS,
                                 text_align=ft.TextAlign.CENTER,
@@ -773,7 +757,7 @@ def MainStage(
                             ft.Text(
                                 subtitle,
                                 size=13,
-                                color=TEXT_DIM,
+                                color=palette.TEXT_DIM,
                                 max_lines=1,
                                 overflow=ft.TextOverflow.ELLIPSIS,
                                 text_align=ft.TextAlign.CENTER,
@@ -794,6 +778,6 @@ def MainStage(
             expand=True,
         ),
         expand=True,
-        bgcolor=BG,
+        bgcolor=palette.BG,
         padding=ft.Padding.symmetric(horizontal=32),
     )

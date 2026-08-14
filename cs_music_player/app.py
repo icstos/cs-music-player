@@ -15,16 +15,11 @@ from .audio_player import (
     resolve_startup_load,
 )
 from .constants import (
-    ACCENT,
-    BORDER,
-    BG,
     MODE_SEQUENCE,
-    PRIMARY,
-    PRIMARY_DARK,
-    SURFACE,
-    TEXT_DIM,
-    TEXT_MAIN,
-    TEXT_MUTED,
+    THEME_MODES,
+    build_dark_theme,
+    build_light_theme,
+    palette,
 )
 from .lrclib import download_lyrics
 from .lyrics import load_lyrics
@@ -33,11 +28,13 @@ from .store import (
     load_favorites,
     load_pinned_folders,
     load_recent_folders,
+    load_theme_mode,
     normalize_folder_path,
     push_recent_folder,
     save_favorites,
     save_pinned_folders,
     save_recent_folders,
+    save_theme_mode,
     toggle_pinned_folder,
     track_key,
 )
@@ -46,21 +43,36 @@ from .ui import MainStage, PlayerBar, Sidebar
 
 @ft.component
 def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
-    page.theme_mode = ft.ThemeMode.SYSTEM
-    page.theme = ft.Theme(
-        color_scheme_seed=PRIMARY,
-        use_material3=True,
-        scaffold_bgcolor=BG,
-        canvas_color=BG,
-        card_bgcolor=SURFACE,
-    )
-    page.dark_theme = ft.Theme(
-        color_scheme_seed="#8b5cf6",
-        use_material3=True,
-        scaffold_bgcolor="#0b1220",
-        canvas_color="#0b1220",
-        card_bgcolor="#111827",
-    )
+    theme_mode, set_theme_mode_state = ft.use_state("system")
+    theme_mode_ref = ft.use_ref("system")
+
+    def set_theme_ui_mode(mode: str) -> None:
+        """更新状态与持久化的唯一入口（供渲染内外共用）。"""
+        theme_mode_ref.current = mode
+
+    def apply_theme_mode(mode: str, *, brightness: str | None = None) -> None:
+        """应用主题模式到全局调色板与 flet Material 主题。"""
+        set_theme_ui_mode(mode)
+        if mode == "system":
+            is_dark = (brightness or page.platform_brightness) == "dark"
+            page.theme_mode = (
+                ft.ThemeMode.DARK if is_dark else ft.ThemeMode.LIGHT
+            )
+            palette.set_mode("dark" if is_dark else "light")
+        else:
+            palette.set_mode(mode)
+            page.theme_mode = (
+                ft.ThemeMode.DARK if mode == "dark" else ft.ThemeMode.LIGHT
+            )
+
+    def _on_brightness_change(e: ft.ControlEvent) -> None:
+        apply_theme_mode(theme_mode_ref.current, brightness=page.platform_brightness)
+        page.update()
+
+    page.on_platform_brightness_change = _on_brightness_change
+    page.theme = build_light_theme()
+    page.dark_theme = build_dark_theme()
+    apply_theme_mode(theme_mode)
     tracks, set_tracks = ft.use_state(list[Track]())
     selected, set_selected = ft.use_state(-1)
     current, set_current = ft.use_state(-1)
@@ -92,8 +104,23 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         prefs = get_prefs()
         folders = await load_recent_folders(prefs)
         pinned = await load_pinned_folders(prefs)
+        saved_mode = await load_theme_mode(prefs)
         set_recent_folders(folders)
         set_pinned_folders(pinned)
+        set_theme_mode_state(saved_mode)
+        theme_mode_ref.current = saved_mode
+        apply_theme_mode(saved_mode)
+
+    def cycle_theme_mode(e: ft.ControlEvent) -> None:
+        """工具栏切换按钮：light → dark → system 循环。"""
+        next_mode = THEME_MODES[
+            (THEME_MODES.index(theme_mode) + 1) % len(THEME_MODES)
+        ]
+        set_theme_mode_state(next_mode)
+        theme_mode_ref.current = next_mode
+        apply_theme_mode(next_mode)
+        asyncio.create_task(save_theme_mode(get_prefs(), next_mode))
+        page.update()
 
     async def ensure_lyrics(track: Track) -> None:
         """曲目缺少本地歌词时，后台从 LRCLIB 下载并回填。"""
@@ -210,16 +237,6 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
 
     ft.use_effect(refresh_lyrics, [current, selected, tracks])
 
-    def on_brightness_change(e: ft.ControlEvent) -> None:
-        page.theme_mode = (
-            ft.ThemeMode.DARK
-            if page.platform_brightness == "dark"
-            else ft.ThemeMode.LIGHT
-        )
-        page.update()
-
-    page.on_platform_brightness_change = on_brightness_change
-
     async def on_import(e: ft.ControlEvent) -> None:
         picker = picker_ref.current
         if picker is None:
@@ -264,7 +281,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                 behavior=ft.SnackBarBehavior.FLOATING,
                 margin=ft.Margin.only(left=16, right=16, bottom=16),
                 duration=ft.Duration(milliseconds=2200),
-                bgcolor=SURFACE,
+                bgcolor=palette.SURFACE,
             )
         )
 
@@ -376,12 +393,12 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                     ft.Icon(
                         ft.Icons.PUSH_PIN if pinned else ft.Icons.FOLDER_OPEN,
                         size=15,
-                        color=ACCENT if pinned else PRIMARY_DARK,
+                        color=palette.ACCENT if pinned else palette.PRIMARY_DARK,
                     ),
                     ft.Text(
                         name,
                         size=12,
-                        color=TEXT_MAIN,
+                        color=palette.TEXT_MAIN,
                         max_lines=1,
                         overflow=ft.TextOverflow.ELLIPSIS,
                         expand=True,
@@ -393,7 +410,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                             else ft.Icons.PUSH_PIN
                         ),
                         icon_size=14,
-                        icon_color=ACCENT if pinned else TEXT_MUTED,
+                        icon_color=palette.ACCENT if pinned else palette.TEXT_MUTED,
                         tooltip="取消固定" if pinned else "固定文件夹",
                         on_click=lambda e, f=folder: asyncio.create_task(
                             toggle_pin_folder(f)
@@ -413,7 +430,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                 text,
                 size=11,
                 weight=ft.FontWeight.W_600,
-                color=TEXT_MUTED,
+                color=palette.TEXT_MUTED,
             ),
             height=32,
         )
@@ -432,7 +449,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         if recent_list:
             recent_items.append(
                 ft.PopupMenuItem(
-                    content=ft.Divider(height=1, color=BORDER),
+                    content=ft.Divider(height=1, color=palette.BORDER),
                     height=1,
                 )
             )
@@ -442,14 +459,14 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     if not pinned_list and not recent_list:
         recent_items.append(
             ft.PopupMenuItem(
-                content=ft.Text("暂无历史文件夹", size=12, color=TEXT_MUTED),
+                content=ft.Text("暂无历史文件夹", size=12, color=palette.TEXT_MUTED),
                 on_click=lambda e: None,
             )
         )
     elif recent_list:
         recent_items.append(
             ft.PopupMenuItem(
-                content=ft.Divider(height=1, color=BORDER),
+                content=ft.Divider(height=1, color=palette.BORDER),
                 height=1,
             )
         )
@@ -457,8 +474,8 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
             ft.PopupMenuItem(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.DELETE_OUTLINE, size=15, color=TEXT_MUTED),
-                        ft.Text("清空历史", size=12, color=TEXT_DIM),
+                        ft.Icon(ft.Icons.DELETE_OUTLINE, size=15, color=palette.TEXT_MUTED),
+                        ft.Text("清空历史", size=12, color=palette.TEXT_DIM),
                     ],
                     spacing=8,
                 ),
@@ -468,6 +485,17 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
 
     menu_width = 300
 
+    theme_icon = {
+        "light": ft.Icons.LIGHT_MODE,
+        "dark": ft.Icons.DARK_MODE,
+        "system": ft.Icons.BRIGHTNESS_AUTO,
+    }[theme_mode]
+    theme_tooltip = {
+        "light": "浅色主题",
+        "dark": "深色主题",
+        "system": "跟随系统",
+    }[theme_mode]
+
     toolbar = ft.Container(
         content=ft.Row(
             [
@@ -475,19 +503,19 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                     [
                         ft.Container(
                             content=ft.Icon(
-                                ft.Icons.LIBRARY_MUSIC, color=SURFACE, size=20
+                                ft.Icons.LIBRARY_MUSIC, color=palette.SURFACE, size=20
                             ),
                             width=36,
                             height=36,
                             alignment=ft.Alignment.CENTER,
-                            bgcolor=PRIMARY,
+                            bgcolor=palette.PRIMARY,
                             border_radius=10,
                         ),
                         ft.Text(
                             "CS 音乐播放器",
                             size=16,
                             weight=ft.FontWeight.W_700,
-                            color=TEXT_MAIN,
+                            color=palette.TEXT_MAIN,
                         ),
                     ],
                     spacing=10,
@@ -496,12 +524,23 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                 ft.Text(
                     "正在播放" if is_playing and track else "",
                     size=12,
-                    color=TEXT_DIM,
+                    color=palette.TEXT_DIM,
                     italic=True,
+                ),
+                ft.IconButton(
+                    icon=theme_icon,
+                    icon_color=palette.TEXT_DIM,
+                    icon_size=20,
+                    tooltip=f"主题：{theme_tooltip}（点击切换）",
+                    on_click=cycle_theme_mode,
+                    style=ft.ButtonStyle(
+                        padding=ft.Padding.all(8),
+                        overlay_color=ft.Colors.with_opacity(0.08, palette.PRIMARY),
+                    ),
                 ),
                 ft.PopupMenuButton(
                     icon=ft.Icons.HISTORY,
-                    icon_color=PRIMARY_DARK,
+                    icon_color=palette.PRIMARY_DARK,
                     icon_size=22,
                     tooltip="历史文件夹",
                     style=ft.ButtonStyle(padding=ft.Padding.all(8)),
@@ -517,8 +556,8 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                     on_click=on_import,
                     style=ft.ButtonStyle(
                         bgcolor={
-                            ft.ControlState.DEFAULT: PRIMARY,
-                            ft.ControlState.HOVERED: PRIMARY_DARK,
+                            ft.ControlState.DEFAULT: palette.PRIMARY,
+                            ft.ControlState.HOVERED: palette.PRIMARY_DARK,
                         },
                         color=ft.Colors.WHITE,
                         padding=ft.Padding.symmetric(horizontal=16, vertical=10),
@@ -528,14 +567,14 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        bgcolor=SURFACE,
-        border=ft.Border(bottom=ft.BorderSide(1, "#dbe3ee")),
+        bgcolor=palette.SURFACE,
+        border=ft.Border(bottom=ft.BorderSide(1, palette.BORDER)),
         padding=ft.Padding.symmetric(horizontal=16, vertical=10),
     )
 
     return ft.Container(
         expand=True,
-        bgcolor=BG,
+        bgcolor=palette.BG,
         content=ft.Column(
             [
                 toolbar,
