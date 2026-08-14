@@ -238,21 +238,39 @@ class Player:
         self.tracks = tracks
         self.current = -1 if not tracks else 0
 
+    def _random_index(self) -> int:
+        """随机选一首，尽量避开当前曲目。"""
+        if len(self.tracks) <= 1:
+            return 0
+        if self.current < 0:
+            return random.randrange(len(self.tracks))
+        idx = random.randrange(len(self.tracks) - 1)
+        return idx if idx < self.current else idx + 1
+
     def _next_index(self, auto: bool) -> int | None:
-        """计算下一首曲目索引。手动切换始终循环；自动切换视模式而定。"""
+        """计算下一首曲目索引。手动切换同样遵循播放模式。"""
         if not self.tracks:
             return None
-        if not auto:
-            return (self.current + 1) % len(self.tracks) if self.current >= 0 else 0
         if self.mode == MODE_LOOP_ONE:
             return self.current
         if self.mode == MODE_SHUFFLE:
-            if len(self.tracks) == 1:
-                return self.current
-            idx = random.randrange(len(self.tracks) - 1)
-            return idx if idx < self.current else idx + 1
+            return self._random_index()
+        # 顺序播放：手动始终循环，自动播完列表停止
+        if not auto:
+            return (self.current + 1) % len(self.tracks) if self.current >= 0 else 0
         nxt = self.current + 1
         return nxt if nxt < len(self.tracks) else None
+
+    def _prev_index(self) -> int | None:
+        """计算上一首曲目索引，同样遵循播放模式。"""
+        if not self.tracks:
+            return None
+        if self.mode == MODE_LOOP_ONE:
+            return self.current
+        if self.mode == MODE_SHUFFLE:
+            return self._random_index()
+        idx = self.current if self.current >= 0 else 0
+        return (idx - 1) % len(self.tracks)
 
     # —— 播放控制 —— #
 
@@ -286,10 +304,10 @@ class Player:
         await self.play_at(target)
 
     async def prev(self) -> None:
-        if not self.tracks:
+        target = self._prev_index()
+        if target is None:
             return
-        idx = self.current if self.current >= 0 else 0
-        await self.play_at((idx - 1) % len(self.tracks))
+        await self.play_at(target)
 
     async def seek(self, seconds: float) -> None:
         if self._audio is not None:
