@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import flet as ft
@@ -22,6 +23,7 @@ from .constants import (
     TEXT_DIM,
     TEXT_MAIN,
 )
+from .lrclib import download_lyrics
 from .lyrics import load_lyrics
 from .store import apply_favorites, load_favorites, save_favorites, track_key
 from .ui import MainStage, PlayerBar, Sidebar
@@ -61,10 +63,38 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     picker_ref = ft.use_ref(None)
     favorites_ref = ft.use_ref(set[str]())
     search_focused_ref = ft.use_ref(False)
+    lyric_downloads_ref = ft.use_ref(set[str]())
 
     def sync_track_state(index: int) -> None:
         set_current(index)
         set_selected(index)
+
+    async def ensure_lyrics(track: Track) -> None:
+        """曲目缺少本地歌词时，后台从 LRCLIB 下载并回填。"""
+        player = player_ref.current
+        if player is None or track.lyrics_path is not None:
+            return
+        key = str(track.path.resolve())
+        if key in lyric_downloads_ref.current:
+            return
+        lyric_downloads_ref.current.add(key)
+        try:
+            path = await download_lyrics(track)
+            if path is not None:
+                track.lyrics_path = path
+                if (
+                    player.current >= 0
+                    and player.tracks[player.current] is track
+                ):
+                    set_lyrics(load_lyrics(path))
+        finally:
+            lyric_downloads_ref.current.discard(key)
+
+    def on_track_change(index: int) -> None:
+        sync_track_state(index)
+        player = player_ref.current
+        if player is not None and 0 <= index < len(player.tracks):
+            asyncio.create_task(ensure_lyrics(player.tracks[index]))
 
     def setup() -> None:
         player_ref.current = Player(
@@ -72,7 +102,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                 on_position=set_position,
                 on_duration=set_duration,
                 on_play_state=set_is_playing,
-                on_track_change=sync_track_state,
+                on_track_change=on_track_change,
             ),
             page,
         )
