@@ -22,10 +22,19 @@ from .constants import (
     SURFACE,
     TEXT_DIM,
     TEXT_MAIN,
+    TEXT_MUTED,
 )
 from .lrclib import download_lyrics
 from .lyrics import load_lyrics
-from .store import apply_favorites, load_favorites, save_favorites, track_key
+from .store import (
+    apply_favorites,
+    load_favorites,
+    load_recent_folders,
+    push_recent_folder,
+    save_favorites,
+    save_recent_folders,
+    track_key,
+)
 from .ui import MainStage, PlayerBar, Sidebar
 
 
@@ -57,6 +66,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     lyrics, set_lyrics = ft.use_state(list())
     search, set_search = ft.use_state("")
     show_favorites, set_show_favorites = ft.use_state(False)
+    recent_folders, set_recent_folders = ft.use_state(list[str]())
 
     dragging = ft.use_ref(False)
     player_ref = ft.use_ref(None)
@@ -68,6 +78,10 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     def sync_track_state(index: int) -> None:
         set_current(index)
         set_selected(index)
+
+    async def load_recent_folder_state() -> None:
+        folders = await load_recent_folders(page.shared_preferences)
+        set_recent_folders(folders)
 
     async def ensure_lyrics(track: Track) -> None:
         """曲目缺少本地歌词时，后台从 LRCLIB 下载并回填。"""
@@ -118,6 +132,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         *,
         play_index: int = 0,
         autoplay: bool = False,
+        source_folder: Path | None = None,
     ) -> None:
         favorites_ref.current = await load_favorites(page.shared_preferences)
         apply_favorites(files, favorites_ref.current)
@@ -128,6 +143,13 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                 await player.play_at(play_index)
         set_tracks(files)
         set_selected(play_index if files else -1)
+        if source_folder is not None:
+            folders = push_recent_folder(
+                await load_recent_folders(page.shared_preferences),
+                str(source_folder),
+            )
+            await save_recent_folders(page.shared_preferences, folders)
+            set_recent_folders(folders)
         if autoplay and 0 <= play_index < len(files):
             set_position(0.0)
             set_duration(files[play_index].duration)
@@ -140,10 +162,10 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         set_is_playing(False)
 
     def init_startup() -> None:
-        if not startup_path:
-            return
-
         async def run() -> None:
+            await load_recent_folder_state()
+            if not startup_path:
+                return
             load = resolve_startup_load(Path(startup_path))
             if load is None:
                 return
@@ -151,6 +173,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                 load.tracks,
                 play_index=load.play_index,
                 autoplay=load.autoplay,
+                source_folder=Path(startup_path).parent if Path(startup_path).is_file() else Path(startup_path),
             )
 
         page.run_task(run)
@@ -184,10 +207,34 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         directory = await picker.get_directory_path("选择音乐文件夹")
         if not directory:
             return
-        files = load_tracks_from_directory(Path(directory))
+        path = Path(directory)
+        files = load_tracks_from_directory(path)
         if not files:
             return
-        await apply_tracks(files)
+        await apply_tracks(files, source_folder=path)
+
+    async def open_recent_folder(folder: str) -> None:
+        path = Path(folder)
+        if not path.exists() or not path.is_dir():
+            notify("历史文件夹已不存在")
+            return
+        files = load_tracks_from_directory(path)
+        if not files:
+            notify("该文件夹没有可播放的音乐")
+            return
+        await apply_tracks(files, source_folder=path)
+        notify(f"已打开：{path.name or path}")
+
+    def notify(message: str) -> None:
+        page.show_dialog(
+            ft.SnackBar(
+                content=ft.Text(message),
+                behavior=ft.SnackBarBehavior.FLOATING,
+                margin=ft.Margin.only(left=16, right=16, bottom=16),
+                duration=ft.Duration(milliseconds=2200),
+                bgcolor=SURFACE,
+            )
+        )
 
     async def on_toggle(e: ft.ControlEvent) -> None:
         if player_ref.current:
@@ -285,6 +332,37 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         else -1
     )
 
+    recent_items: list[ft.PopupMenuItem] = []
+    if recent_folders:
+        for folder in recent_folders:
+            path = Path(folder)
+            recent_items.append(
+                ft.PopupMenuItem(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.FOLDER_OPEN, size=16, color=PRIMARY_DARK),
+                            ft.Text(
+                                path.name or folder,
+                                size=12,
+                                color=TEXT_MAIN,
+                                max_lines=1,
+                                overflow=ft.TextOverflow.ELLIPSIS,
+                            ),
+                        ],
+                        spacing=8,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    on_click=lambda e, f=folder: asyncio.create_task(open_recent_folder(f)),
+                )
+            )
+    else:
+        recent_items.append(
+            ft.PopupMenuItem(
+                content=ft.Text("暂无历史文件夹", size=12, color=TEXT_MUTED),
+                on_click=lambda e: None,
+            )
+        )
+
     toolbar = ft.Container(
         content=ft.Row(
             [
@@ -315,6 +393,14 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                     size=12,
                     color=TEXT_DIM,
                     italic=True,
+                ),
+                ft.PopupMenuButton(
+                    icon=ft.Icons.HISTORY,
+                    icon_color=PRIMARY_DARK,
+                    icon_size=22,
+                    tooltip="历史文件夹",
+                    style=ft.ButtonStyle(padding=ft.Padding.all(8)),
+                    items=recent_items,
                 ),
                 ft.Button(
                     content="导入音乐",
