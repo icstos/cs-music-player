@@ -29,6 +29,7 @@ from .lyrics import build_lyrics_index, match_lyrics_path
 class Track:
     path: Path
     title: str = ""
+    artist: str = ""
     duration: float = 0.0
     lyrics_path: Path | None = None
     favorite: bool = False
@@ -63,6 +64,34 @@ def get_track_duration(path: Path) -> float:
     except Exception:
         pass
     return 0.0
+
+
+def get_track_artist(path: Path) -> str:
+    """用 mutagen 读取歌手/艺术家，缺失时返回空字符串。"""
+    try:
+        from mutagen import File
+
+        audio = File(str(path))
+        if audio is None:
+            return ""
+
+        for name in ("artist", "TPE1", "performer", "albumartist", "TPE2"):
+            value = getattr(audio, name, None)
+            if value:
+                text = str(value).strip("[]' ")
+                if text:
+                    return text
+        tags = getattr(audio, "tags", None)
+        if tags is not None:
+            for key in ("artist", "TPE1"):
+                value = tags.get(key)
+                if value:
+                    text = str(value).strip("[]' ")
+                    if text:
+                        return text
+    except Exception:
+        pass
+    return ""
 
 
 def extract_cover_src(path: Path) -> str | None:
@@ -104,6 +133,7 @@ def load_tracks_from_directory(directory: Path) -> list[Track]:
     return [
         Track(
             path=f,
+            artist=get_track_artist(f),
             duration=get_track_duration(f),
             lyrics_path=match_lyrics_path(lyrics_index, f.stem),
             cover_src=extract_cover_src(f),
@@ -121,6 +151,7 @@ def create_track(path: Path) -> Track | None:
     lyrics_index = build_lyrics_index(resolved.parent / "lyrics")
     return Track(
         path=resolved,
+        artist=get_track_artist(resolved),
         duration=get_track_duration(resolved),
         lyrics_path=match_lyrics_path(lyrics_index, resolved.stem),
         cover_src=extract_cover_src(resolved),

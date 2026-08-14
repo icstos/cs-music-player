@@ -155,12 +155,25 @@ def PlaylistItem(
                             max_lines=1,
                             overflow=ft.TextOverflow.ELLIPSIS,
                         ),
-                        ft.Text(
-                            track.path.parent.name,
-                            size=11,
-                            color=TEXT_MUTED,
-                            max_lines=1,
-                            overflow=ft.TextOverflow.ELLIPSIS,
+                        ft.Row(
+                            [
+                                ft.Text(
+                                    track.artist or track.path.parent.name,
+                                    size=11,
+                                    color=TEXT_MUTED,
+                                    max_lines=1,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
+                                    expand=True,
+                                ),
+                                ft.Text(
+                                    _fmt(track.duration),
+                                    size=11,
+                                    color=TEXT_MUTED,
+                                    text_align=ft.TextAlign.RIGHT,
+                                ),
+                            ],
+                            spacing=8,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                     ],
                     spacing=2,

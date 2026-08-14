@@ -353,6 +353,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         and (
             not search
             or search.lower() in t.title.lower()
+            or search.lower() in t.artist.lower()
             or search.lower() in t.path.parent.name.lower()
         )
     ]
