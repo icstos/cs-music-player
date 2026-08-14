@@ -19,6 +19,81 @@ def _fmt(seconds: float) -> str:
     return f"{m}:{s:02d}"
 
 
+def _fmt(seconds: float) -> str:
+    """秒数 → ``m:ss`` 格式。"""
+    if seconds <= 0 or seconds != seconds:
+        return "0:00"
+    m, s = divmod(int(seconds), 60)
+    return f"{m}:{s:02d}"
+
+
+def _fmt_size(size: int) -> str:
+    """字节数 → 可读文件大小。"""
+    if size <= 0:
+        return ""
+    if size >= 1 << 30:
+        return f"{size / (1 << 30):.2f} GB"
+    if size >= 1 << 20:
+        return f"{size / (1 << 20):.1f} MB"
+    return f"{size / (1 << 10):.0f} KB"
+
+
+def _fmt_frequency(hz: int) -> str:
+    """采样率 Hz → ``44.1 kHz``。"""
+    if hz <= 0:
+        return ""
+    return f"{hz / 1000:g} kHz"
+
+
+def _fmt_bitrate(bps: int) -> str:
+    """码率 bps → ``320 kbps``。"""
+    if bps <= 0:
+        return ""
+    return f"{bps / 1000:g} kbps"
+
+
+def _track_info_lines(track: Track) -> list[str]:
+    """汇总曲目可读信息行，供悬浮提示使用。"""
+    lines: list[str] = []
+    album = track.album
+    if album:
+        lines.append(f"专辑：{album}")
+    size = _fmt_size(track.file_size)
+    if size:
+        lines.append(f"大小：{size}")
+    freq = _fmt_frequency(track.sample_rate)
+    if freq:
+        lines.append(f"采样率：{freq}")
+    bitrate = _fmt_bitrate(track.bitrate)
+    if bitrate:
+        lines.append(f"码率：{bitrate}")
+    if track.channels:
+        lines.append(f"声道：{track.channels}")
+    if track.audio_format:
+        lines.append(f"格式：{track.audio_format}")
+    return lines
+
+
+def _track_info_tooltip(track: Track) -> ft.Tooltip | str:
+    """构建曲目信息悬浮提示：多行文本或 Tooltip 对象。"""
+    lines: list[str] = [
+        f"{track.title}",
+        f"歌手：{track.artist or '未知'}",
+    ]
+    if track.duration > 0:
+        lines.append(f"时长：{_fmt(track.duration)}")
+    lines.extend(_track_info_lines(track))
+    return ft.Tooltip(
+        message="\n".join(lines),
+        text_style=ft.TextStyle(size=11, color=palette.SURFACE),
+        padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+        bgcolor=ft.Colors.with_opacity(0.92, palette.PRIMARY_DARK),
+        prefer_below=True,
+        vertical_offset=6,
+        wait_duration=ft.Duration(milliseconds=300),
+    )
+
+
 def _clamp_progress_value(value: float, duration: float) -> float:
     """将播放进度限制在 Slider 合法范围内，避免浮点误差导致越界。"""
     if duration <= 0:
@@ -191,6 +266,7 @@ def PlaylistItem(
     return ft.GestureDetector(
         on_tap=_on_select,
         on_double_tap=_on_play,
+        tooltip=_track_info_tooltip(track),
         content=row,
     )
 

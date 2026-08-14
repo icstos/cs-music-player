@@ -34,10 +34,18 @@ class Track:
     lyrics_path: Path | None = None
     favorite: bool = False
     cover_src: str | None = None
+    album: str = ""
+    file_size: int = 0
+    sample_rate: int = 0
+    bitrate: int = 0
+    channels: int = 0
+    audio_format: str = ""
 
     def __post_init__(self) -> None:
         if not self.title:
             self.title = self.path.stem
+        if not self.audio_format:
+            self.audio_format = self.path.suffix[1:].upper() or "UNKNOWN"
 
 
 @dataclass
@@ -53,53 +61,97 @@ class PlayerCallbacks:
 # ── 工具函数 ── #
 
 
-def get_track_duration(path: Path) -> float:
-    """用 mutagen 读取音频时长（秒），失败返回 0。"""
+def _audio_tags(path: Path):
+    """打开音频文件并返回 (audio, tags)；失败返回 (None, None)。"""
     try:
         from mutagen import File
 
         audio = File(str(path))
-        if audio is not None and hasattr(audio, "info"):
-            return float(audio.info.length)
     except Exception:
-        pass
+        return None, None
+    tags = getattr(audio, "tags", None) if audio is not None else None
+    return audio, tags
+
+
+def _tag_value(tags, *keys: str) -> str:
+    """从标签对象中按候选键读取文本值，优先级由参数顺序决定。"""
+    if tags is None:
+        return ""
+    for key in keys:
+        value = tags.get(key)
+        if value is None:
+            continue
+        if hasattr(value, "text"):
+            items = [str(i) for i in (value.text or [])]
+        elif isinstance(value, str):
+            items = [value]
+        elif isinstance(value, (list, tuple)):
+            items = [str(i) for i in value]
+        else:
+            items = [str(value)]
+        text = " / ".join(i.strip("[]' \u3000") for i in items if i)
+        if text:
+            return text
+    return ""
+
+
+def get_track_duration(path: Path) -> float:
+    """用 mutagen 读取音频时长（秒），失败返回 0。"""
+    audio, _ = _audio_tags(path)
+    if audio is not None and hasattr(audio, "info"):
+        try:
+            return float(audio.info.length)
+        except Exception:
+            pass
     return 0.0
 
 
 def get_track_artist(path: Path) -> str:
     """用 mutagen 读取歌手/艺术家，缺失时返回空字符串。"""
-    try:
-        from mutagen import File
+    _, tags = _audio_tags(path)
+    if tags is None:
+        return ""
+    return _tag_value(
+        tags, "artist", "TPE1", "albumartist", "TPE2", "\xa9ART", "performer"
+    )
 
-        audio = File(str(path))
-        if audio is None:
-            return ""
 
-        for name in ("artist", "TPE1", "performer", "albumartist", "TPE2"):
-            value = getattr(audio, name, None)
+def read_audio_info(path: Path) -> dict:
+    """一次性读取曲目元数据：时长、歌手、专辑、采样率、码率、声道等。
+
+    返回 dict，供 ``Track`` 构建时批量填充；读取失败返回空 dict。
+    """
+    audio, tags = _audio_tags(path)
+    info = getattr(audio, "info", None) if audio is not None else None
+    data: dict = {}
+    if info is not None:
+        try:
+            if getattr(info, "length", None) is not None:
+                data["duration"] = float(info.length)
+        except Exception:
+            pass
+        for attr in ("sample_rate", "bitrate", "channels"):
+            value = getattr(info, attr, None)
             if value:
-                text = str(value).strip("[]' ")
-                if text:
-                    return text
-        tags = getattr(audio, "tags", None)
-        if tags is not None:
-            for key in ("artist", "TPE1"):
-                value = tags.get(key)
-                if value:
-                    text = str(value).strip("[]' ")
-                    if text:
-                        return text
-    except Exception:
-        pass
-    return ""
+                data[attr] = int(value)
+    if tags is not None:
+        album = _tag_value(tags, "album", "TALB", "\xa9alb", "ALBUM")
+        if album:
+            data["album"] = album
+        artist = _tag_value(
+            tags, "artist", "TPE1", "albumartist", "TPE2", "\xa9ART", "performer"
+        )
+        if artist:
+            data["artist"] = artist
+    return data
 
 
 def extract_cover_src(path: Path) -> str | None:
     """从音频内嵌标签提取封面，返回 data URI；无封面时返回 None。"""
     try:
-        from mutagen import File
+        import base64
 
-        audio = File(str(path))
+        audio, _ = _audio_tags(path)
         if audio is None:
             return None
 
@@ -130,17 +182,27 @@ def extract_cover_src(path: Path) -> str | None:
 def load_tracks_from_directory(directory: Path) -> list[Track]:
     """扫描目录下的音频文件，并匹配同目录 lyrics 子文件夹中的歌词。"""
     lyrics_index = build_lyrics_index(directory / "lyrics")
-    return [
-        Track(
-            path=f,
-            artist=get_track_artist(f),
-            duration=get_track_duration(f),
-            lyrics_path=match_lyrics_path(lyrics_index, f.stem),
-            cover_src=extract_cover_src(f),
+    tracks: list[Track] = []
+    for f in sorted(directory.iterdir()):
+        if not (f.is_file() and f.suffix.lower() in SUPPORTED_FORMATS):
+            continue
+        info = read_audio_info(f)
+        tracks.append(
+            Track(
+                path=f,
+                artist=get_track_artist(f)
+                or info.get("artist", ""),
+                duration=info.get("duration", 0.0),
+                lyrics_path=match_lyrics_path(lyrics_index, f.stem),
+                cover_src=extract_cover_src(f),
+                album=info.get("album", ""),
+                file_size=f.stat().st_size,
+                sample_rate=info.get("sample_rate", 0),
+                bitrate=info.get("bitrate", 0),
+                channels=info.get("channels", 0),
+            )
         )
-        for f in sorted(directory.iterdir())
-        if f.is_file() and f.suffix.lower() in SUPPORTED_FORMATS
-    ]
+    return tracks
 
 
 def create_track(path: Path) -> Track | None:
@@ -149,12 +211,18 @@ def create_track(path: Path) -> Track | None:
     if not resolved.is_file() or resolved.suffix.lower() not in SUPPORTED_FORMATS:
         return None
     lyrics_index = build_lyrics_index(resolved.parent / "lyrics")
+    info = read_audio_info(resolved)
     return Track(
         path=resolved,
-        artist=get_track_artist(resolved),
-        duration=get_track_duration(resolved),
+        artist=info.get("artist", ""),
+        duration=info.get("duration", 0.0),
         lyrics_path=match_lyrics_path(lyrics_index, resolved.stem),
         cover_src=extract_cover_src(resolved),
+        album=info.get("album", ""),
+        file_size=resolved.stat().st_size,
+        sample_rate=info.get("sample_rate", 0),
+        bitrate=info.get("bitrate", 0),
+        channels=info.get("channels", 0),
     )
 
 
