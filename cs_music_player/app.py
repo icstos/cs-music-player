@@ -15,6 +15,8 @@ from .audio_player import (
     resolve_startup_load,
 )
 from .constants import (
+    ACCENT,
+    BORDER,
     BG,
     MODE_SEQUENCE,
     PRIMARY,
@@ -29,10 +31,14 @@ from .lyrics import load_lyrics
 from .store import (
     apply_favorites,
     load_favorites,
+    load_pinned_folders,
     load_recent_folders,
+    normalize_folder_path,
     push_recent_folder,
     save_favorites,
+    save_pinned_folders,
     save_recent_folders,
+    toggle_pinned_folder,
     track_key,
 )
 from .ui import MainStage, PlayerBar, Sidebar
@@ -67,6 +73,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     search, set_search = ft.use_state("")
     show_favorites, set_show_favorites = ft.use_state(False)
     recent_folders, set_recent_folders = ft.use_state(list[str]())
+    pinned_folders, set_pinned_folders = ft.use_state(set[str]())
 
     dragging = ft.use_ref(False)
     player_ref = ft.use_ref(None)
@@ -74,6 +81,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     favorites_ref = ft.use_ref(set[str]())
     search_focused_ref = ft.use_ref(False)
     lyric_downloads_ref = ft.use_ref(set[str]())
+    folder_menu_ref = ft.use_ref(None)
 
     def sync_track_state(index: int) -> None:
         set_current(index)
@@ -81,7 +89,9 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
 
     async def load_recent_folder_state() -> None:
         folders = await load_recent_folders(page.shared_preferences)
+        pinned = await load_pinned_folders(page.shared_preferences)
         set_recent_folders(folders)
+        set_pinned_folders(pinned)
 
     async def ensure_lyrics(track: Track) -> None:
         """曲目缺少本地歌词时，后台从 LRCLIB 下载并回填。"""
@@ -225,6 +235,18 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         await apply_tracks(files, source_folder=path)
         notify(f"已打开：{path.name or path}")
 
+    async def toggle_pin_folder(folder: str) -> None:
+        """固定 / 取消固定某个文件夹，并持久化。"""
+        pinned = toggle_pinned_folder(set(pinned_folders), folder)
+        await save_pinned_folders(page.shared_preferences, pinned)
+        set_pinned_folders(pinned)
+
+    async def clear_recent_history() -> None:
+        """清空最近打开记录，保留固定文件夹。"""
+        await save_recent_folders(page.shared_preferences, [])
+        set_recent_folders([])
+        notify("已清空历史记录")
+
     def notify(message: str) -> None:
         page.show_dialog(
             ft.SnackBar(
@@ -332,36 +354,107 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         else -1
     )
 
+    def build_folder_item(folder: str, pinned: bool) -> ft.PopupMenuItem:
+        path = Path(folder)
+        name = path.name or folder
+        return ft.PopupMenuItem(
+            tooltip=folder,
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.PUSH_PIN if pinned else ft.Icons.FOLDER_OPEN,
+                        size=15,
+                        color=ACCENT if pinned else PRIMARY_DARK,
+                    ),
+                    ft.Text(
+                        name,
+                        size=12,
+                        color=TEXT_MAIN,
+                        max_lines=1,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                        expand=True,
+                    ),
+                    ft.IconButton(
+                        icon=(
+                            ft.Icons.PUSH_PIN_OUTLINED
+                            if not pinned
+                            else ft.Icons.PUSH_PIN
+                        ),
+                        icon_size=14,
+                        icon_color=ACCENT if pinned else TEXT_MUTED,
+                        tooltip="取消固定" if pinned else "固定文件夹",
+                        on_click=lambda e, f=folder: asyncio.create_task(
+                            toggle_pin_folder(f)
+                        ),
+                        padding=ft.Padding.all(2),
+                    ),
+                ],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            on_click=lambda e, f=folder: asyncio.create_task(open_recent_folder(f)),
+        )
+
+    def build_section_header(text: str) -> ft.PopupMenuItem:
+        return ft.PopupMenuItem(
+            content=ft.Text(
+                text,
+                size=11,
+                weight=ft.FontWeight.W_600,
+                color=TEXT_MUTED,
+            ),
+            height=32,
+        )
+
     recent_items: list[ft.PopupMenuItem] = []
-    if recent_folders:
-        for folder in recent_folders:
-            path = Path(folder)
+    pinned_set = set(pinned_folders)
+    pinned_list = [
+        f for f in recent_folders if f in pinned_set
+    ] + [
+        f for f in sorted(pinned_set) if f not in recent_folders
+    ]
+    recent_list = [f for f in recent_folders if f not in pinned_set]
+    if pinned_list:
+        recent_items.append(build_section_header("固定文件夹"))
+        recent_items.extend(build_folder_item(f, True) for f in pinned_list)
+        if recent_list:
             recent_items.append(
                 ft.PopupMenuItem(
-                    content=ft.Row(
-                        [
-                            ft.Icon(ft.Icons.FOLDER_OPEN, size=16, color=PRIMARY_DARK),
-                            ft.Text(
-                                path.name or folder,
-                                size=12,
-                                color=TEXT_MAIN,
-                                max_lines=1,
-                                overflow=ft.TextOverflow.ELLIPSIS,
-                            ),
-                        ],
-                        spacing=8,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    on_click=lambda e, f=folder: asyncio.create_task(open_recent_folder(f)),
+                    content=ft.Divider(height=1, color=BORDER),
+                    height=1,
                 )
             )
-    else:
+    if recent_list:
+        recent_items.append(build_section_header("最近打开"))
+        recent_items.extend(build_folder_item(f, False) for f in recent_list)
+    if not pinned_list and not recent_list:
         recent_items.append(
             ft.PopupMenuItem(
                 content=ft.Text("暂无历史文件夹", size=12, color=TEXT_MUTED),
                 on_click=lambda e: None,
             )
         )
+    elif recent_list:
+        recent_items.append(
+            ft.PopupMenuItem(
+                content=ft.Divider(height=1, color=BORDER),
+                height=1,
+            )
+        )
+        recent_items.append(
+            ft.PopupMenuItem(
+                content=ft.Row(
+                    [
+                        ft.Icon(ft.Icons.DELETE_OUTLINE, size=15, color=TEXT_MUTED),
+                        ft.Text("清空历史", size=12, color=TEXT_DIM),
+                    ],
+                    spacing=8,
+                ),
+                on_click=lambda e: asyncio.create_task(clear_recent_history()),
+            )
+        )
+
+    menu_width = 300
 
     toolbar = ft.Container(
         content=ft.Row(
@@ -400,6 +493,10 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                     icon_size=22,
                     tooltip="历史文件夹",
                     style=ft.ButtonStyle(padding=ft.Padding.all(8)),
+                    menu_position=ft.PopupMenuPosition.UNDER,
+                    size_constraints=ft.BoxConstraints(
+                        min_width=menu_width, max_width=menu_width
+                    ),
                     items=recent_items,
                 ),
                 ft.Button(
