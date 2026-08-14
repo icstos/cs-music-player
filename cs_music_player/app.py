@@ -78,6 +78,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     dragging = ft.use_ref(False)
     player_ref = ft.use_ref(None)
     picker_ref = ft.use_ref(None)
+    prefs_ref = ft.use_ref(None)
     favorites_ref = ft.use_ref(set[str]())
     search_focused_ref = ft.use_ref(False)
     lyric_downloads_ref = ft.use_ref(set[str]())
@@ -88,8 +89,9 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         set_selected(index)
 
     async def load_recent_folder_state() -> None:
-        folders = await load_recent_folders(page.shared_preferences)
-        pinned = await load_pinned_folders(page.shared_preferences)
+        prefs = get_prefs()
+        folders = await load_recent_folders(prefs)
+        pinned = await load_pinned_folders(prefs)
         set_recent_folders(folders)
         set_pinned_folders(pinned)
 
@@ -130,10 +132,17 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
             ),
             page,
         )
+        prefs_ref.current = ft.SharedPreferences()
+        page.services.append(prefs_ref.current)
         picker = ft.FilePicker()
         page.services.append(picker)
         page.update()
         picker_ref.current = picker
+
+    def get_prefs() -> ft.SharedPreferences:
+        if prefs_ref.current is None:
+            prefs_ref.current = ft.SharedPreferences()
+        return prefs_ref.current
 
     ft.use_effect(setup, dependencies=[])
 
@@ -144,7 +153,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         autoplay: bool = False,
         source_folder: Path | None = None,
     ) -> None:
-        favorites_ref.current = await load_favorites(page.shared_preferences)
+        favorites_ref.current = await load_favorites(get_prefs())
         apply_favorites(files, favorites_ref.current)
         player = player_ref.current
         if player:
@@ -154,11 +163,12 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         set_tracks(files)
         set_selected(play_index if files else -1)
         if source_folder is not None:
+            prefs = get_prefs()
             folders = push_recent_folder(
-                await load_recent_folders(page.shared_preferences),
+                await load_recent_folders(prefs),
                 str(source_folder),
             )
-            await save_recent_folders(page.shared_preferences, folders)
+            await save_recent_folders(prefs, folders)
             set_recent_folders(folders)
         if autoplay and 0 <= play_index < len(files):
             set_position(0.0)
@@ -238,12 +248,12 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     async def toggle_pin_folder(folder: str) -> None:
         """固定 / 取消固定某个文件夹，并持久化。"""
         pinned = toggle_pinned_folder(set(pinned_folders), folder)
-        await save_pinned_folders(page.shared_preferences, pinned)
+        await save_pinned_folders(get_prefs(), pinned)
         set_pinned_folders(pinned)
 
     async def clear_recent_history() -> None:
         """清空最近打开记录，保留固定文件夹。"""
-        await save_recent_folders(page.shared_preferences, [])
+        await save_recent_folders(get_prefs(), [])
         set_recent_folders([])
         notify("已清空历史记录")
 
@@ -315,7 +325,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
             favorites_ref.current.add(key)
         else:
             favorites_ref.current.discard(key)
-        await save_favorites(page.shared_preferences, favorites_ref.current)
+        await save_favorites(get_prefs(), favorites_ref.current)
         set_tracks([*tracks])
 
     async def on_seek(seconds: float) -> None:
