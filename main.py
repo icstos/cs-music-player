@@ -3,7 +3,13 @@
 import flet as ft
 
 from cs_music_player.app import PlayerApp
-from cs_music_player.constants import build_dark_theme, build_light_theme, palette
+from cs_music_player.constants import (
+    FONT_FAMILY,
+    FONT_FAMILY_FILE,
+    build_dark_theme,
+    build_light_theme,
+    palette,
+)
 from cs_music_player.startup import parse_startup_path
 
 STARTUP_PATH = parse_startup_path()
@@ -11,6 +17,7 @@ STARTUP_PATH = parse_startup_path()
 
 def main(page: ft.Page) -> None:
     page.title = "CS 音乐播放器"
+    page.fonts = {FONT_FAMILY: FONT_FAMILY_FILE}
     page.theme_mode = ft.ThemeMode.LIGHT
     page.theme = build_light_theme()
     page.dark_theme = build_dark_theme()
@@ -30,4 +37,4 @@ def main(page: ft.Page) -> None:
 
 
 if __name__ == "__main__":
-    ft.run(main)
+    ft.run(main, assets_dir="assets")

@@ -112,12 +112,17 @@ palette = _Palette()
 THEME_SEED_LIGHT = _LIGHT_PALETTE["PRIMARY"]
 THEME_SEED_DARK = _DARK_PALETTE["PRIMARY"]
 
+# ── 本地字体 ── #
+FONT_FAMILY = "Alibaba PuHuiTi"
+FONT_FAMILY_FILE = "/fonts/AlibabaPuHuiTi-3-55-Regular.otf"
+
 
 def build_light_theme() -> ft.Theme:
     """供 page.theme 使用：亮色 Material3 主题。"""
     return ft.Theme(
         color_scheme_seed=THEME_SEED_LIGHT,
         use_material3=True,
+        font_family=FONT_FAMILY,
         scaffold_bgcolor=_LIGHT_PALETTE["SCAFFOLD"],
         canvas_color=_LIGHT_PALETTE["CANVAS"],
         card_bgcolor=_LIGHT_PALETTE["CARD"],
@@ -129,6 +134,7 @@ def build_dark_theme() -> ft.Theme:
     return ft.Theme(
         color_scheme_seed=THEME_SEED_DARK,
         use_material3=True,
+        font_family=FONT_FAMILY,
         scaffold_bgcolor=_DARK_PALETTE["SCAFFOLD"],
         canvas_color=_DARK_PALETTE["CANVAS"],
         card_bgcolor=_DARK_PALETTE["CARD"],
