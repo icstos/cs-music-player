@@ -6,9 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "cs-music-player"
 version = "0.0.0"
 description = "CS Music Player - dependencies moved from requirements.txt"
+requires-python = ">=3.12"
 authors = [{name = "Your Name", email = "you@example.com"}]
 dependencies = [
     "flet>=0.85.3",
     "flet-audio>=0.85.3",
     "mutagen>=1.47",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
 ]
