@@ -52,45 +52,66 @@ def _fmt_bitrate(bps: int) -> str:
     return f"{bps / 1000:g} kbps"
 
 
-def _track_info_lines(track: Track) -> list[str]:
-    """汇总曲目可读信息行，供悬浮提示使用。"""
-    lines: list[str] = []
-    album = track.album
-    if album:
-        lines.append(f"专辑：{album}")
+def _kv(label: str, value: str) -> str:
+    """生成两列对齐的键值行：标签宽度不足 4 个全角字符时补全角空格。"""
+    return f"{label}{'　' * (4 - len(label))}{value}"
+
+
+def _track_info_tooltip(track: Track) -> ft.Tooltip:
+    """曲目信息悬浮卡：延迟出现、跟随光标、深色质感卡片。"""
+    header = [
+        f"♪　{track.title or track.path.name}",
+        _kv("歌手", track.artist or "未知"),
+    ]
+    rows: list[str] = []
+    if track.duration > 0:
+        rows.append(_kv("时长", _fmt(track.duration)))
+    if track.album:
+        rows.append(_kv("专辑", track.album))
     size = _fmt_size(track.file_size)
     if size:
-        lines.append(f"大小：{size}")
+        rows.append(_kv("大小", size))
     freq = _fmt_frequency(track.sample_rate)
     if freq:
-        lines.append(f"采样率：{freq}")
+        rows.append(_kv("采样率", freq))
     bitrate = _fmt_bitrate(track.bitrate)
     if bitrate:
-        lines.append(f"码率：{bitrate}")
+        rows.append(_kv("码率", bitrate))
     if track.channels:
-        lines.append(f"声道：{track.channels}")
+        rows.append(_kv("声道", str(track.channels)))
     if track.audio_format:
-        lines.append(f"格式：{track.audio_format}")
-    return lines
+        rows.append(_kv("格式", track.audio_format))
 
-
-def _track_info_tooltip(track: Track) -> ft.Tooltip | str:
-    """构建曲目信息悬浮提示：多行文本或 Tooltip 对象。"""
-    lines: list[str] = [
-        f"{track.title}",
-        f"歌手：{track.artist or '未知'}",
-    ]
-    if track.duration > 0:
-        lines.append(f"时长：{_fmt(track.duration)}")
-    lines.extend(_track_info_lines(track))
+    body = "\n".join(header + (["─" * 15, *rows] if rows else []))
     return ft.Tooltip(
-        message="\n".join(lines),
-        text_style=ft.TextStyle(size=11, color=palette.SURFACE),
-        padding=ft.Padding.symmetric(horizontal=10, vertical=8),
-        bgcolor=ft.Colors.with_opacity(0.92, palette.PRIMARY_DARK),
+        message=body,
+        text_style=ft.TextStyle(
+            size=11.5,
+            height=1.65,
+            color=ft.Colors.WHITE,
+            letter_spacing=0.2,
+        ),
+        text_align=ft.TextAlign.START,
+        padding=ft.Padding.symmetric(horizontal=14, vertical=11),
+        decoration=ft.BoxDecoration(
+            bgcolor=ft.Colors.with_opacity(0.97, palette.PRIMARY_DARK),
+            border_radius=ft.BorderRadius.all(10),
+            border=ft.Border.all(
+                1, ft.Colors.with_opacity(0.28, ft.Colors.WHITE)
+            ),
+            shadows=[
+                ft.BoxShadow(
+                    blur_radius=22,
+                    color=ft.Colors.with_opacity(0.35, ft.Colors.BLACK),
+                    offset=ft.Offset(0, 6),
+                )
+            ],
+        ),
+        size_constraints=ft.BoxConstraints(max_width=340),
         prefer_below=True,
-        vertical_offset=6,
-        wait_duration=ft.Duration(milliseconds=300),
+        vertical_offset=10,
+        wait_duration=ft.Duration(milliseconds=600),
+        exit_duration=ft.Duration(milliseconds=120),
     )
 
 
