@@ -19,6 +19,16 @@ def _fmt(seconds: float) -> str:
     return f"{m}:{s:02d}"
 
 
+def fmt_duration(seconds: float) -> str:
+    """秒数 → 倒计时可读格式（``mm:ss`` / ``h:mm:ss``）。"""
+    total = max(0, int(seconds))
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m:02d}:{s:02d}"
+
+
 def _fmt(seconds: float) -> str:
     """秒数 → ``m:ss`` 格式。"""
     if seconds <= 0 or seconds != seconds:
@@ -857,6 +867,148 @@ def LyricsPanel(
         )
 
     return body
+
+
+# ── 睡眠定时器 ── #
+
+_SLEEP_PRESETS_MINUTES = (10, 15, 30, 45, 60)
+
+
+@ft.component
+def SleepTimerButton(
+    remaining: float,
+    on_click: Callable[[], None],
+) -> ft.Control:
+    """睡眠定时器入口：仅图标，激活时强调色提示。"""
+    active = remaining > 0
+    tooltip = (
+        f"睡眠定时器（剩余 {fmt_duration(remaining)}）"
+        if active
+        else "睡眠定时器"
+    )
+    return ft.IconButton(
+        icon=ft.Icons.BEDTIME if active else ft.Icons.BEDTIME_OUTLINED,
+        icon_color=palette.ACCENT if active else palette.TEXT_DIM,
+        icon_size=20,
+        tooltip=tooltip,
+        on_click=lambda e: on_click(),
+        style=ft.ButtonStyle(
+            padding=ft.Padding.all(8),
+            overlay_color=ft.Colors.with_opacity(0.08, palette.PRIMARY),
+        ),
+    )
+
+
+def build_sleep_dialog(
+    remaining: float,
+    on_start: Callable[[int], None],
+    on_cancel: Callable[[], None],
+    on_close: Callable[[], None],
+) -> ft.AlertDialog:
+    """睡眠定时器配置弹窗：快捷预设 + 时/分/秒自定义，激活时可查看剩余并取消。"""
+    hours_ref = ft.Ref()
+    minutes_ref = ft.Ref()
+    seconds_ref = ft.Ref()
+
+    def _field(ref: ft.Ref, label: str) -> ft.TextField:
+        return ft.TextField(
+            ref=ref,
+            label=label,
+            keyboard_type=ft.KeyboardType.NUMBER,
+            width=66,
+            dense=True,
+            text_align=ft.TextAlign.CENTER,
+            border_radius=8,
+            content_padding=ft.Padding.symmetric(horizontal=8, vertical=8),
+        )
+
+    def start_custom(e: ft.ControlEvent) -> None:
+        def _val(ref: ft.Ref) -> int:
+            try:
+                return int((ref.current.value or "").strip() or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        total = _val(hours_ref) * 3600 + _val(minutes_ref) * 60 + _val(seconds_ref)
+        if total > 0:
+            on_start(total)
+
+    presets = ft.Row(
+        [
+            ft.Chip(
+                label=ft.Text(f"{m} 分钟", size=12),
+                on_select=lambda e, m=m: on_start(m * 60),
+            )
+            for m in _SLEEP_PRESETS_MINUTES
+        ],
+        spacing=6,
+        wrap=True,
+    )
+
+    custom = ft.Row(
+        [
+            _field(hours_ref, "时"),
+            _field(minutes_ref, "分"),
+            _field(seconds_ref, "秒"),
+            ft.FilledButton(
+                content=ft.Text("开始", size=12),
+                on_click=start_custom,
+                style=ft.ButtonStyle(
+                    bgcolor=palette.PRIMARY,
+                    color=ft.Colors.WHITE,
+                    padding=ft.Padding.symmetric(horizontal=14, vertical=8),
+                ),
+            ),
+        ],
+        spacing=8,
+        vertical_alignment=ft.CrossAxisAlignment.END,
+    )
+
+    body: list[ft.Control] = [
+        ft.Text("倒计时结束后自动关闭软件", size=12, color=palette.TEXT_DIM),
+        ft.Container(height=4),
+        presets,
+        ft.Divider(height=1, color=palette.BORDER),
+        custom,
+    ]
+    if remaining > 0:
+        body.extend(
+            [
+                ft.Divider(height=1, color=palette.BORDER),
+                ft.Row(
+                    [
+                        ft.Icon(ft.Icons.TIMER, size=16, color=palette.ACCENT),
+                        ft.Text(
+                            f"剩余 {fmt_duration(remaining)}",
+                            size=13,
+                            weight=ft.FontWeight.W_600,
+                            color=palette.ACCENT,
+                        ),
+                        ft.Container(expand=True),
+                        ft.TextButton(
+                            content=ft.Text("取消定时", size=12, color=palette.TEXT_DIM),
+                            on_click=lambda e: on_cancel(),
+                        ),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+            ]
+        )
+
+    return ft.AlertDialog(
+        modal=True,
+        title=ft.Text("睡眠定时器", size=16, weight=ft.FontWeight.W_700),
+        content=ft.Container(
+            content=ft.Column(body, spacing=10, width=320),
+            padding=ft.Padding.only(top=4),
+        ),
+        actions=[
+            ft.TextButton(
+                content=ft.Text("关闭", size=12, color=palette.TEXT_DIM),
+                on_click=lambda e: on_close(),
+            )
+        ],
+    )
 
 
 # ── 歌词同步（隐藏式微调） ── #

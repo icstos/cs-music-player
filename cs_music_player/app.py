@@ -40,7 +40,29 @@ from .store import (
     toggle_pinned_folder,
     track_key,
 )
-from .ui import MainStage, PlayerBar, Sidebar
+from .ui import (
+    MainStage,
+    PlayerBar,
+    Sidebar,
+    SleepTimerButton,
+    build_sleep_dialog,
+)
+
+
+async def run_sleep_countdown(
+    page: ft.Page,
+    total: int,
+    on_tick,
+) -> None:
+    """睡眠倒计时主循环：按绝对截止时间每秒回调剩余秒数。"""
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + total
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            break
+        on_tick(max(0.0, remaining))
+        await asyncio.sleep(1.0)
 
 
 @ft.component
@@ -84,6 +106,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     volume, set_volume = ft.use_state(0.7)
     speed, set_speed = ft.use_state(1.0)
     mode, set_mode = ft.use_state(MODE_SEQUENCE)
+    sleep_remaining, set_sleep_remaining = ft.use_state(0.0)
     lyrics, set_lyrics = ft.use_state(list())
     lyric_offset, set_lyric_offset = ft.use_state(0.0)
     search, set_search = ft.use_state("")
@@ -99,6 +122,8 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     search_focused_ref = ft.use_ref(False)
     lyric_downloads_ref = ft.use_ref(set[str]())
     folder_menu_ref = ft.use_ref(None)
+    sleep_task_ref = ft.use_ref(None)
+    sleep_dialog_ref = ft.use_ref(None)
 
     def sync_track_state(index: int) -> None:
         set_current(index)
@@ -351,6 +376,56 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         if player_ref.current:
             player_ref.current.set_speed(value)
 
+    # —— 睡眠定时器 —— #
+
+    def close_sleep_dialog() -> None:
+        if sleep_dialog_ref.current is not None:
+            try:
+                page.pop_dialog()
+            except Exception:
+                pass
+            sleep_dialog_ref.current = None
+
+    def start_sleep_timer(total: int) -> None:
+        """启动倒计时；结束后自动关闭软件。再次调用会重置倒计时。"""
+        task = sleep_task_ref.current
+        if task is not None and not task.done():
+            task.cancel()
+        set_sleep_remaining(float(total))
+        close_sleep_dialog()
+
+        async def countdown() -> None:
+            try:
+                await run_sleep_countdown(page, total, set_sleep_remaining)
+            except asyncio.CancelledError:
+                raise
+            set_sleep_remaining(0.0)
+            sleep_task_ref.current = None
+            try:
+                await page.window.close()
+            except Exception:
+                pass
+
+        sleep_task_ref.current = asyncio.create_task(countdown())
+
+    def cancel_sleep_timer() -> None:
+        task = sleep_task_ref.current
+        if task is not None and not task.done():
+            task.cancel()
+        sleep_task_ref.current = None
+        set_sleep_remaining(0.0)
+        close_sleep_dialog()
+
+    def open_sleep_dialog() -> None:
+        dialog = build_sleep_dialog(
+            sleep_remaining,
+            start_sleep_timer,
+            cancel_sleep_timer,
+            close_sleep_dialog,
+        )
+        sleep_dialog_ref.current = dialog
+        page.show_dialog(dialog)
+
     def on_mode(e: ft.ControlEvent) -> None:
         if player_ref.current:
             set_mode(player_ref.current.cycle_mode())
@@ -563,6 +638,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                     color=palette.TEXT_DIM,
                     italic=True,
                 ),
+                SleepTimerButton(sleep_remaining, open_sleep_dialog),
                 ft.IconButton(
                     icon=theme_icon,
                     icon_color=palette.TEXT_DIM,
