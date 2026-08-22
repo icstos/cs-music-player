@@ -736,6 +736,7 @@ def LyricsLine(
             max_lines=2,
             overflow=ft.TextOverflow.ELLIPSIS,
         ),
+        alignment=ft.Alignment.CENTER,
         padding=ft.Padding.symmetric(vertical=6 if is_current else 4),
         animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
     )
@@ -772,16 +773,16 @@ def LyricsPanel(
         )
     else:
         body = ft.Container(
-            content=ft.Column(
+            content=ft.ListView(
                 controls=[
-                    LyricsLine(line.text, i == active) for i, line in enumerate(lines)
+                    LyricsLine(line.text, i == active)
+                    for i, line in enumerate(lines)
                 ],
                 spacing=2,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                scroll=ft.ScrollMode.AUTO,
+                padding=ft.Padding.symmetric(horizontal=28, vertical=8),
+                expand=True,
             ),
             expand=True,
-            padding=ft.Padding.symmetric(horizontal=24),
         )
 
     return body
@@ -891,7 +892,7 @@ def LyricSyncControl(
                     [ft.Container(expand=True), toggle],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
-                padding=ft.Padding.only(left=24, right=24, top=2, bottom=4),
+                padding=ft.Padding.only(left=28, right=28, top=2, bottom=4),
             ),
             ft.AnimatedSwitcher(
                 content=bar if expanded else ft.Container(),
@@ -1003,7 +1004,7 @@ def MainStage(
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=6,
                     ),
-                    padding=ft.Padding.only(top=32, bottom=16),
+                    padding=ft.Padding.only(top=32, left=32, right=32, bottom=16),
                 ),
                 lyrics_section,
             ],
@@ -1013,5 +1014,4 @@ def MainStage(
         ),
         expand=True,
         bgcolor=palette.BG,
-        padding=ft.Padding.symmetric(horizontal=32),
     )
