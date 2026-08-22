@@ -17,6 +17,8 @@ from .constants import (
     MODE_SEQUENCE,
     MODE_LOOP_ONE,
     MODE_SHUFFLE,
+    SPEED_MAX,
+    SPEED_MIN,
     SUPPORTED_FORMATS,
 )
 from .lyrics import build_lyrics_index, match_lyrics_path
@@ -283,6 +285,7 @@ class Player:
         self.mode: str = MODE_SEQUENCE
         self._playing = False
         self._volume = 0.7
+        self._speed = 1.0
         self._audio: fa.Audio | None = None
 
     # —— Audio 控件生命周期 —— #
@@ -292,6 +295,7 @@ class Player:
             src=src,
             autoplay=True,
             volume=self._volume,
+            playback_rate=self._speed,
             on_state_change=self._on_state,
             on_duration_change=self._on_duration,
             on_position_change=self._on_position,
@@ -419,6 +423,13 @@ class Player:
         self._volume = max(0.0, min(1.0, value))
         if self._audio is not None:
             self._audio.volume = self._volume
+            self._audio.update()
+
+    def set_speed(self, value: float) -> None:
+        """设置播放倍速（夹紧到合法范围），并实时应用到当前音频。"""
+        self._speed = max(SPEED_MIN, min(SPEED_MAX, float(value)))
+        if self._audio is not None:
+            self._audio.playback_rate = self._speed
             self._audio.update()
 
     def cycle_mode(self) -> str:

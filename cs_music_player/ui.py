@@ -7,7 +7,7 @@ from collections.abc import Callable
 import flet as ft
 
 from .audio_player import Track
-from .constants import MODE_ICONS, palette
+from .constants import MODE_ICONS, SPEED_PRESETS, palette
 from .lyrics import LyricLine, current_line_index
 
 
@@ -618,6 +618,73 @@ def PlayControls(
     )
 
 
+# ── 播放速度 ── #
+
+
+def _fmt_speed(rate: float) -> str:
+    """倍速 → 可读标签，如 ``1.0x``、``1.25x``。"""
+    return f"{rate:g}x"
+
+
+@ft.component
+def SpeedControl(
+    speed: float,
+    on_change: Callable[[float], None],
+) -> ft.Control:
+    """倍速选择：紧凑按钮显示当前速度，点击弹出预设菜单。"""
+    is_default = speed == 1.0
+
+    items: list[ft.PopupMenuItem] = []
+    for preset in SPEED_PRESETS:
+        selected = abs(speed - preset) < 1e-9
+        items.append(
+            ft.PopupMenuItem(
+                content=ft.Row(
+                    [
+                        ft.Icon(
+                            ft.Icons.CHECK
+                            if selected
+                            else ft.Icons.RADIO_BUTTON_UNCHECKED,
+                            size=15,
+                            color=palette.PRIMARY if selected else palette.TEXT_MUTED,
+                        ),
+                        ft.Text(
+                            _fmt_speed(preset),
+                            size=12,
+                            weight=ft.FontWeight.W_600
+                            if selected
+                            else ft.FontWeight.NORMAL,
+                            color=palette.TEXT_MAIN if selected else palette.TEXT_DIM,
+                        ),
+                    ],
+                    spacing=8,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                on_click=lambda e, r=preset: on_change(r),
+            )
+        )
+
+    return ft.PopupMenuButton(
+        content=ft.Container(
+            content=ft.Text(
+                _fmt_speed(speed),
+                size=11,
+                weight=ft.FontWeight.W_600,
+                color=palette.PRIMARY if not is_default else palette.TEXT_DIM,
+            ),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            border_radius=8,
+            bgcolor=(
+                palette.PRIMARY_TINT_12 if not is_default else ft.Colors.TRANSPARENT
+            ),
+        ),
+        items=items,
+        tooltip="播放速度",
+        menu_position=ft.PopupMenuPosition.UNDER,
+        style=ft.ButtonStyle(padding=ft.Padding.all(2)),
+    )
+
+
 # ── 底部播放栏 ── #
 
 
@@ -628,6 +695,7 @@ def PlayerBar(
     position: float,
     duration: float,
     volume: float,
+    speed: float,
     mode: str,
     dragging: ft.MutableRef[bool],
     on_toggle: Callable,
@@ -636,6 +704,7 @@ def PlayerBar(
     on_mode: Callable,
     on_seek: Callable[[float], None],
     on_volume: Callable[[float], None],
+    on_speed: Callable[[float], None],
 ) -> ft.Control:
     title = "未选择歌曲" if track is None else track.title
     subtitle = "导入音乐文件夹开始播放" if track is None else track.path.parent.name
@@ -697,6 +766,8 @@ def PlayerBar(
                             compact=True,
                         ),
                         ft.Container(width=6),
+                        SpeedControl(speed, on_speed),
+                        ft.Container(width=4),
                         VolumeControl(volume, on_volume, compact=True),
                     ],
                     spacing=6,

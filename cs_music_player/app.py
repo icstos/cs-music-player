@@ -82,6 +82,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     position, set_position = ft.use_state(0.0)
     duration, set_duration = ft.use_state(0.0)
     volume, set_volume = ft.use_state(0.7)
+    speed, set_speed = ft.use_state(1.0)
     mode, set_mode = ft.use_state(MODE_SEQUENCE)
     lyrics, set_lyrics = ft.use_state(list())
     lyric_offset, set_lyric_offset = ft.use_state(0.0)
@@ -344,6 +345,11 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         set_volume(value)
         if player_ref.current:
             player_ref.current.set_volume(value)
+
+    def on_speed(value: float) -> None:
+        set_speed(value)
+        if player_ref.current:
+            player_ref.current.set_speed(value)
 
     def on_mode(e: ft.ControlEvent) -> None:
         if player_ref.current:
@@ -645,6 +651,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                     position,
                     duration,
                     volume,
+                    speed,
                     mode,
                     dragging,
                     on_toggle,
@@ -653,6 +660,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                     on_mode,
                     on_seek,
                     on_volume,
+                    on_speed,
                 ),
             ],
             spacing=0,

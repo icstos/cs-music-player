@@ -23,6 +23,11 @@ MODE_ICONS = {
     MODE_SHUFFLE: ft.Icons.SHUFFLE,
 }
 
+# ── 播放速度 ── #
+SPEED_PRESETS = (0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 4.0, 8.0)
+SPEED_MIN = 0.25
+SPEED_MAX = 8.0
+
 # ── 调色板（亮 / 暗两套，键名保持一致）── #
 _LIGHT_PALETTE = {
     "PRIMARY": "#2563eb",
