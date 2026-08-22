@@ -26,12 +26,14 @@ from .lyrics import load_lyrics
 from .store import (
     apply_favorites,
     load_favorites,
+    load_lyric_offsets,
     load_pinned_folders,
     load_recent_folders,
     load_theme_mode,
     normalize_folder_path,
     push_recent_folder,
     save_favorites,
+    save_lyric_offset,
     save_pinned_folders,
     save_recent_folders,
     save_theme_mode,
@@ -82,6 +84,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     volume, set_volume = ft.use_state(0.7)
     mode, set_mode = ft.use_state(MODE_SEQUENCE)
     lyrics, set_lyrics = ft.use_state(list())
+    lyric_offset, set_lyric_offset = ft.use_state(0.0)
     search, set_search = ft.use_state("")
     show_favorites, set_show_favorites = ft.use_state(False)
     recent_folders, set_recent_folders = ft.use_state(list[str]())
@@ -236,6 +239,33 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         set_lyrics(load_lyrics(track.lyrics_path))
 
     ft.use_effect(refresh_lyrics, [current, selected, tracks])
+
+    def sync_lyric_offset() -> None:
+        """当前曲目切换后，从持久化中恢复该歌的歌词微调偏移。"""
+
+        async def run() -> None:
+            idx = current if current >= 0 else selected
+            track = tracks[idx] if 0 <= idx < len(tracks) else None
+            if track is None:
+                set_lyric_offset(0.0)
+                return
+            offsets = await load_lyric_offsets(get_prefs())
+            set_lyric_offset(offsets.get(track_key(track.path), 0.0))
+
+        page.run_task(run)
+
+    ft.use_effect(sync_lyric_offset, [current, selected, tracks])
+
+    def adjust_lyric_offset(delta: float) -> None:
+        """歌词微调：正偏移提前显示，负偏移延后显示，并按曲目持久化。"""
+        new_offset = round(lyric_offset + delta, 3)
+        set_lyric_offset(new_offset)
+        idx = current if current >= 0 else selected
+        track = tracks[idx] if 0 <= idx < len(tracks) else None
+        if track is not None:
+            asyncio.create_task(
+                save_lyric_offset(get_prefs(), track_key(track.path), new_offset)
+            )
 
     async def on_import(e: ft.ControlEvent) -> None:
         picker = picker_ref.current
@@ -596,7 +626,15 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                             on_search_focus,
                             on_search_blur,
                         ),
-                        MainStage(track, is_playing, lyrics, position, has_lyrics),
+                        MainStage(
+                            track,
+                            is_playing,
+                            lyrics,
+                            position,
+                            has_lyrics,
+                            lyric_offset,
+                            adjust_lyric_offset,
+                        ),
                     ],
                     expand=True,
                     spacing=0,

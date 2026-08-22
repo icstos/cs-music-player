@@ -746,8 +746,9 @@ def LyricsPanel(
     lines: list[LyricLine],
     position: float,
     has_lyrics_file: bool,
+    offset: float = 0.0,
 ) -> ft.Control:
-    active = current_line_index(lines, position)
+    active = current_line_index(lines, position, offset)
 
     if not has_lyrics_file:
         body = ft.Container(
@@ -786,6 +787,124 @@ def LyricsPanel(
     return body
 
 
+# ── 歌词同步（隐藏式微调） ── #
+
+
+def _offset_label(offset: float) -> str:
+    """偏移秒数 → 可读文案（正值=提前，负值=延后）。"""
+    if offset == 0:
+        return "同步"
+    direction = "提前" if offset > 0 else "延后"
+    return f"{direction} {abs(round(offset, 3)):g}s"
+
+
+@ft.component
+def LyricSyncControl(
+    offset: float,
+    track_path: str,
+    on_adjust: Callable[[float], None],
+) -> ft.Control:
+    """歌词同步控件：默认仅显示右上角小图标，点击展开微调面板。
+
+    已微调时图标旁显示状态胶囊（如“提前 0.3s”），切歌自动收起。
+    """
+    expanded, set_expanded = ft.use_state(False)
+    # 切歌时自动收起，避免残留面板干扰新歌
+    ft.use_effect(lambda: set_expanded(False), [track_path])
+
+    adjusted = offset != 0
+
+    def step_button(text: str, delta: float, tooltip: str) -> ft.Control:
+        return ft.Container(
+            content=ft.Text(
+                text,
+                size=11,
+                weight=ft.FontWeight.W_600,
+                color=palette.PRIMARY,
+            ),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            border_radius=8,
+            bgcolor=palette.PRIMARY_TINT_12,
+            ink=True,
+            tooltip=tooltip,
+            on_click=lambda e, d=delta: on_adjust(d),
+        )
+
+    def reset_button() -> ft.Control:
+        return ft.Container(
+            content=ft.Icon(ft.Icons.REFRESH, size=15, color=palette.TEXT_DIM),
+            padding=ft.Padding.all(5),
+            border_radius=8,
+            ink=True,
+            tooltip="恢复歌词同步",
+            on_click=lambda e: (on_adjust(-offset), set_expanded(False)),
+        )
+
+    toggle = ft.Container(
+        content=ft.Row(
+            [
+                ft.Icon(
+                    ft.Icons.TUNE,
+                    size=16,
+                    color=palette.ACCENT if adjusted else palette.TEXT_MUTED,
+                ),
+                ft.Text(
+                    _offset_label(offset),
+                    size=11,
+                    weight=ft.FontWeight.W_600 if adjusted else ft.FontWeight.NORMAL,
+                    color=palette.ACCENT if adjusted else palette.TEXT_MUTED,
+                ),
+            ],
+            spacing=4,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+        border_radius=14,
+        bgcolor=palette.ACCENT_TINT_10 if adjusted else ft.Colors.TRANSPARENT,
+        ink=True,
+        tooltip="歌词同步调整",
+        on_click=lambda e: set_expanded(not expanded),
+    )
+
+    bar = ft.Container(
+        content=ft.Row(
+            [
+                step_button("提前 0.1s", 0.1, "歌词提前 100ms"),
+                step_button("延后 0.1s", -0.1, "歌词延后 100ms"),
+                step_button("提前 1s", 1.0, "歌词提前 1000ms"),
+                step_button("延后 1s", -1.0, "歌词延后 1000ms"),
+                *([reset_button()] if adjusted else []),
+            ],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            alignment=ft.MainAxisAlignment.CENTER,
+        ),
+        bgcolor=palette.SURFACE_SOFT,
+        border_radius=10,
+        padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+    )
+
+    return ft.Column(
+        [
+            ft.Container(
+                content=ft.Row(
+                    [ft.Container(expand=True), toggle],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                padding=ft.Padding.only(left=24, right=24, top=2, bottom=4),
+            ),
+            ft.AnimatedSwitcher(
+                content=bar if expanded else ft.Container(),
+                transition=ft.AnimatedSwitcherTransition.FADE,
+                duration=200,
+                switch_in_curve=ft.AnimationCurve.EASE_OUT,
+                switch_out_curve=ft.AnimationCurve.EASE_IN,
+            ),
+        ],
+        spacing=0,
+    )
+
+
 # ── 主舞台（封面 + 歌词） ── #
 
 
@@ -796,6 +915,8 @@ def MainStage(
     lyrics: list[LyricLine],
     position: float,
     has_lyrics_file: bool,
+    lyric_offset: float = 0.0,
+    on_adjust_lyric: Callable[[float], None] | None = None,
 ) -> ft.Control:
     title = "未选择歌曲" if track is None else track.title
     subtitle = "请导入音乐文件夹" if track is None else track.path.parent.name
@@ -834,6 +955,25 @@ def MainStage(
             ),
         )
 
+    track_path = str(track.path) if track is not None else ""
+    lyrics_section = ft.Column(
+        [
+            (
+                LyricSyncControl(lyric_offset, track_path, on_adjust_lyric)
+                if has_lyrics_file and on_adjust_lyric is not None
+                else ft.Container()
+            ),
+            ft.Container(
+                content=LyricsPanel(
+                    lyrics, position, has_lyrics_file, offset=lyric_offset
+                ),
+                expand=True,
+            ),
+        ],
+        spacing=0,
+        expand=True,
+    )
+
     return ft.Container(
         content=ft.Column(
             [
@@ -865,10 +1005,7 @@ def MainStage(
                     ),
                     padding=ft.Padding.only(top=32, bottom=16),
                 ),
-                ft.Container(
-                    content=LyricsPanel(lyrics, position, has_lyrics_file),
-                    expand=True,
-                ),
+                lyrics_section,
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=0,

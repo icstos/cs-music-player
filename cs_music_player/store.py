@@ -1,7 +1,8 @@
-"""用户数据持久化：收藏列表、最近打开的文件夹等。"""
+"""用户数据持久化：收藏列表、最近打开的文件夹、歌词微调偏移等。"""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from .audio_player import Track
@@ -10,6 +11,7 @@ FAVORITES_KEY = "favorite_tracks"
 RECENT_FOLDERS_KEY = "recent_folders"
 PINNED_FOLDERS_KEY = "pinned_folders"
 THEME_MODE_KEY = "theme_mode"
+LYRIC_OFFSETS_KEY = "lyric_offsets"
 MAX_RECENT_FOLDERS = 8
 
 
@@ -94,3 +96,29 @@ async def load_theme_mode(prefs) -> str:
 async def save_theme_mode(prefs, mode: str) -> None:
     if mode in THEME_MODE_VALUES:
         await prefs.set(THEME_MODE_KEY, mode)
+
+
+async def load_lyric_offsets(prefs) -> dict[str, float]:
+    """读取每首歌的歌词微调偏移（秒），键为曲目绝对路径。"""
+    raw = await prefs.get(LYRIC_OFFSETS_KEY)
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else {}
+    except (TypeError, ValueError):
+        return {}
+    offsets: dict[str, float] = {}
+    for key, value in data.items():
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            offsets[str(key)] = float(value)
+    return offsets
+
+
+async def save_lyric_offset(prefs, key: str, offset: float) -> None:
+    """保存某首歌的歌词微调偏移；偏移为 0 时移除记录。"""
+    offsets = await load_lyric_offsets(prefs)
+    if offset == 0:
+        offsets.pop(key, None)
+    else:
+        offsets[key] = round(float(offset), 3)
+    await prefs.set(LYRIC_OFFSETS_KEY, json.dumps(offsets, ensure_ascii=False))

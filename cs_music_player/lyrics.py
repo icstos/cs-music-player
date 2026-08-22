@@ -92,10 +92,16 @@ def load_lyrics(path: Path) -> list[LyricLine]:
     return parse_plain_lyrics(text)
 
 
-def current_line_index(lines: list[LyricLine], position: float) -> int:
-    """根据当前播放位置返回应高亮的歌词行索引。"""
+def current_line_index(
+    lines: list[LyricLine], position: float, offset: float = 0.0
+) -> int:
+    """根据当前播放位置返回应高亮的歌词行索引。
+
+    ``offset`` 为歌词微调偏移（秒）：正值使歌词提前显示，负值延后。
+    """
     if not lines:
         return -1
+    position += offset
     if all(line.time == 0.0 for line in lines):
         return 0
     idx = -1
