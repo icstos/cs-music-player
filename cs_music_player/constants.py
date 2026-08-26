@@ -28,6 +28,11 @@ SPEED_PRESETS = (0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 4.0, 8.0)
 SPEED_MIN = 0.25
 SPEED_MAX = 8.0
 
+# ── 歌词字体 ── #
+LYRIC_FONT_DEFAULT = 15.0
+LYRIC_FONT_MIN = 11.0
+LYRIC_FONT_MAX = 24.0
+
 # ── 调色板（亮 / 暗两套，键名保持一致）── #
 _LIGHT_PALETTE = {
     "PRIMARY": "#2563eb",

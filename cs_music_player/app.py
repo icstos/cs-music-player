@@ -15,6 +15,9 @@ from .audio_player import (
     resolve_startup_load,
 )
 from .constants import (
+    LYRIC_FONT_DEFAULT,
+    LYRIC_FONT_MAX,
+    LYRIC_FONT_MIN,
     MODE_SEQUENCE,
     THEME_MODES,
     build_dark_theme,
@@ -26,6 +29,7 @@ from .lyrics import load_lyrics
 from .store import (
     apply_favorites,
     load_favorites,
+    load_lyric_font,
     load_lyric_offsets,
     load_pinned_folders,
     load_recent_folders,
@@ -33,6 +37,7 @@ from .store import (
     normalize_folder_path,
     push_recent_folder,
     save_favorites,
+    save_lyric_font,
     save_lyric_offset,
     save_pinned_folders,
     save_recent_folders,
@@ -109,6 +114,7 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     sleep_remaining, set_sleep_remaining = ft.use_state(0.0)
     lyrics, set_lyrics = ft.use_state(list())
     lyric_offset, set_lyric_offset = ft.use_state(0.0)
+    lyric_font, set_lyric_font = ft.use_state(LYRIC_FONT_DEFAULT)
     search, set_search = ft.use_state("")
     show_favorites, set_show_favorites = ft.use_state(False)
     recent_folders, set_recent_folders = ft.use_state(list[str]())
@@ -134,11 +140,13 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         folders = await load_recent_folders(prefs)
         pinned = await load_pinned_folders(prefs)
         saved_mode = await load_theme_mode(prefs)
+        saved_font = await load_lyric_font(prefs)
         set_recent_folders(folders)
         set_pinned_folders(pinned)
         set_theme_mode_state(saved_mode)
         theme_mode_ref.current = saved_mode
         apply_theme_mode(saved_mode)
+        set_lyric_font(saved_font)
 
     def cycle_theme_mode(e: ft.ControlEvent) -> None:
         """工具栏切换按钮：light → dark → system 循环。"""
@@ -292,6 +300,14 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
             asyncio.create_task(
                 save_lyric_offset(get_prefs(), track_key(track.path), new_offset)
             )
+
+    def adjust_lyric_font(delta: float) -> None:
+        """歌词字号：±1px 步进，夹紧到合法范围，全局持久化。"""
+        new_size = round(
+            min(LYRIC_FONT_MAX, max(LYRIC_FONT_MIN, lyric_font + delta)), 1
+        )
+        set_lyric_font(new_size)
+        asyncio.create_task(save_lyric_font(get_prefs(), new_size))
 
     async def on_import(e: ft.ControlEvent) -> None:
         picker = picker_ref.current
@@ -715,7 +731,9 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                             position,
                             has_lyrics,
                             lyric_offset,
+                            lyric_font,
                             adjust_lyric_offset,
+                            adjust_lyric_font,
                         ),
                     ],
                     expand=True,

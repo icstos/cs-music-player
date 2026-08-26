@@ -7,7 +7,12 @@ from collections.abc import Callable
 import flet as ft
 
 from .audio_player import Track
-from .constants import MODE_ICONS, SPEED_PRESETS, palette
+from .constants import (
+    LYRIC_FONT_DEFAULT,
+    MODE_ICONS,
+    SPEED_PRESETS,
+    palette,
+)
 from .lyrics import LyricLine, current_line_index
 
 
@@ -806,11 +811,13 @@ def PlayerBar(
 def LyricsLine(
     text: str,
     is_current: bool,
+    font_size: float = LYRIC_FONT_DEFAULT,
 ) -> ft.Control:
+    size = font_size + 3 if is_current else font_size
     return ft.Container(
         content=ft.Text(
             text,
-            size=18 if is_current else 15,
+            size=size,
             weight=ft.FontWeight.W_700 if is_current else ft.FontWeight.NORMAL,
             color=palette.PRIMARY if is_current else palette.TEXT_MUTED,
             text_align=ft.TextAlign.CENTER,
@@ -829,6 +836,7 @@ def LyricsPanel(
     position: float,
     has_lyrics_file: bool,
     offset: float = 0.0,
+    font_size: float = LYRIC_FONT_DEFAULT,
 ) -> ft.Control:
     active = current_line_index(lines, position, offset)
 
@@ -856,7 +864,7 @@ def LyricsPanel(
         body = ft.Container(
             content=ft.ListView(
                 controls=[
-                    LyricsLine(line.text, i == active)
+                    LyricsLine(line.text, i == active, font_size)
                     for i, line in enumerate(lines)
                 ],
                 spacing=2,
@@ -1023,22 +1031,28 @@ def _offset_label(offset: float) -> str:
 
 
 @ft.component
-def LyricSyncControl(
+@ft.component
+def LyricSettingsEntry(
     offset: float,
+    font_size: float,
     track_path: str,
     on_adjust: Callable[[float], None],
+    on_adjust_font: Callable[[float], None],
 ) -> ft.Control:
-    """歌词同步控件：默认仅显示右上角小图标，点击展开微调面板。
+    """歌词区右上角两个独立入口：歌词同步 与 字体大小。
 
-    已微调时图标旁显示状态胶囊（如“提前 0.3s”），切歌自动收起。
+    各为一个小图标，点击展开各自面板（互斥展开），切歌自动收起。
     """
-    expanded, set_expanded = ft.use_state(False)
-    # 切歌时自动收起，避免残留面板干扰新歌
-    ft.use_effect(lambda: set_expanded(False), [track_path])
+    active, set_active = ft.use_state("")
+    # 切歌时自动收起
+    ft.use_effect(lambda: set_active(""), [track_path])
 
-    adjusted = offset != 0
+    sync_adjusted = offset != 0
+    font_changed = abs(font_size - LYRIC_FONT_DEFAULT) > 1e-9
+    sync_active = active == "sync"
+    font_active = active == "font"
 
-    def step_button(text: str, delta: float, tooltip: str) -> ft.Control:
+    def pill_button(text: str, tooltip: str, on_click) -> ft.Control:
         return ft.Container(
             content=ft.Text(
                 text,
@@ -1051,53 +1065,126 @@ def LyricSyncControl(
             bgcolor=palette.PRIMARY_TINT_12,
             ink=True,
             tooltip=tooltip,
-            on_click=lambda e, d=delta: on_adjust(d),
+            on_click=on_click,
         )
 
-    def reset_button() -> ft.Control:
+    def reset_button(tooltip: str, on_click) -> ft.Control:
         return ft.Container(
             content=ft.Icon(ft.Icons.REFRESH, size=15, color=palette.TEXT_DIM),
             padding=ft.Padding.all(5),
             border_radius=8,
             ink=True,
-            tooltip="恢复歌词同步",
-            on_click=lambda e: (on_adjust(-offset), set_expanded(False)),
+            tooltip=tooltip,
+            on_click=on_click,
         )
 
-    toggle = ft.Container(
-        content=ft.Row(
-            [
-                ft.Icon(
-                    ft.Icons.TUNE,
-                    size=16,
-                    color=palette.ACCENT if adjusted else palette.TEXT_MUTED,
-                ),
-                ft.Text(
-                    _offset_label(offset),
-                    size=11,
-                    weight=ft.FontWeight.W_600 if adjusted else ft.FontWeight.NORMAL,
-                    color=palette.ACCENT if adjusted else palette.TEXT_MUTED,
-                ),
-            ],
-            spacing=4,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        ),
-        padding=ft.Padding.symmetric(horizontal=8, vertical=4),
-        border_radius=14,
-        bgcolor=palette.ACCENT_TINT_10 if adjusted else ft.Colors.TRANSPARENT,
-        ink=True,
-        tooltip="歌词同步调整",
-        on_click=lambda e: set_expanded(not expanded),
+    def toggle_chip(
+        icon: ft.Icon,
+        label: str,
+        is_active: bool,
+        is_changed: bool,
+        tooltip: str,
+        on_click,
+    ) -> ft.Control:
+        highlighted = is_active or is_changed
+        return ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        icon,
+                        size=16,
+                        color=palette.ACCENT if highlighted else palette.TEXT_MUTED,
+                    ),
+                    ft.Text(
+                        label,
+                        size=11,
+                        weight=ft.FontWeight.W_600
+                        if highlighted
+                        else ft.FontWeight.NORMAL,
+                        color=palette.ACCENT if highlighted else palette.TEXT_MUTED,
+                    ),
+                ],
+                spacing=4,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            border_radius=14,
+            bgcolor=palette.ACCENT_TINT_10 if highlighted else ft.Colors.TRANSPARENT,
+            ink=True,
+            tooltip=tooltip,
+            on_click=on_click,
+        )
+
+    sync_toggle = toggle_chip(
+        ft.Icons.TUNE,
+        _offset_label(offset),
+        sync_active,
+        sync_adjusted,
+        "歌词同步调整",
+        lambda e: set_active("sync" if not sync_active else ""),
+    )
+    font_toggle = toggle_chip(
+        ft.Icons.FORMAT_SIZE,
+        f"{font_size:g}px",
+        font_active,
+        font_changed,
+        "歌词字体大小",
+        lambda e: set_active("font" if not font_active else ""),
     )
 
-    bar = ft.Container(
+    sync_bar = ft.Container(
         content=ft.Row(
             [
-                step_button("提前 0.1s", 0.1, "歌词提前 100ms"),
-                step_button("延后 0.1s", -0.1, "歌词延后 100ms"),
-                step_button("提前 1s", 1.0, "歌词提前 1000ms"),
-                step_button("延后 1s", -1.0, "歌词延后 1000ms"),
-                *([reset_button()] if adjusted else []),
+                pill_button("提前 0.1s", "歌词提前 100ms", lambda e: on_adjust(0.1)),
+                pill_button("延后 0.1s", "歌词延后 100ms", lambda e: on_adjust(-0.1)),
+                pill_button("提前 1s", "歌词提前 1000ms", lambda e: on_adjust(1.0)),
+                pill_button("延后 1s", "歌词延后 1000ms", lambda e: on_adjust(-1.0)),
+                *(
+                    [
+                        reset_button(
+                            "恢复歌词同步",
+                            lambda e: (on_adjust(-offset), set_active("")),
+                        )
+                    ]
+                    if sync_adjusted
+                    else []
+                ),
+            ],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            alignment=ft.MainAxisAlignment.CENTER,
+        ),
+        bgcolor=palette.SURFACE_SOFT,
+        border_radius=10,
+        padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+    )
+
+    font_bar = ft.Container(
+        content=ft.Row(
+            [
+                pill_button("A-", "缩小字号", lambda e: on_adjust_font(-1)),
+                pill_button("A+", "增大字号", lambda e: on_adjust_font(1)),
+                ft.Text(
+                    f"{font_size:g}px",
+                    size=11,
+                    weight=ft.FontWeight.W_600,
+                    color=palette.TEXT_DIM,
+                    width=36,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                *(
+                    [
+                        reset_button(
+                            "恢复默认字号",
+                            lambda e: (
+                                on_adjust_font(LYRIC_FONT_DEFAULT - font_size),
+                                set_active(""),
+                            ),
+                        )
+                    ]
+                    if font_changed
+                    else []
+                ),
             ],
             spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -1112,13 +1199,24 @@ def LyricSyncControl(
         [
             ft.Container(
                 content=ft.Row(
-                    [ft.Container(expand=True), toggle],
+                    [
+                        ft.Container(expand=True),
+                        sync_toggle,
+                        font_toggle,
+                    ],
+                    spacing=6,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 padding=ft.Padding.only(left=28, right=28, top=2, bottom=4),
             ),
             ft.AnimatedSwitcher(
-                content=bar if expanded else ft.Container(),
+                content=(
+                    sync_bar
+                    if sync_active
+                    else font_bar
+                    if font_active
+                    else ft.Container()
+                ),
                 transition=ft.AnimatedSwitcherTransition.FADE,
                 duration=200,
                 switch_in_curve=ft.AnimationCurve.EASE_OUT,
@@ -1140,7 +1238,9 @@ def MainStage(
     position: float,
     has_lyrics_file: bool,
     lyric_offset: float = 0.0,
+    lyric_font: float = LYRIC_FONT_DEFAULT,
     on_adjust_lyric: Callable[[float], None] | None = None,
+    on_adjust_font: Callable[[float], None] | None = None,
 ) -> ft.Control:
     title = "未选择歌曲" if track is None else track.title
     subtitle = "请导入音乐文件夹" if track is None else track.path.parent.name
@@ -1183,13 +1283,25 @@ def MainStage(
     lyrics_section = ft.Column(
         [
             (
-                LyricSyncControl(lyric_offset, track_path, on_adjust_lyric)
-                if has_lyrics_file and on_adjust_lyric is not None
+                LyricSettingsEntry(
+                    lyric_offset,
+                    lyric_font,
+                    track_path,
+                    on_adjust_lyric,
+                    on_adjust_font,
+                )
+                if has_lyrics_file
+                and on_adjust_lyric is not None
+                and on_adjust_font is not None
                 else ft.Container()
             ),
             ft.Container(
                 content=LyricsPanel(
-                    lyrics, position, has_lyrics_file, offset=lyric_offset
+                    lyrics,
+                    position,
+                    has_lyrics_file,
+                    offset=lyric_offset,
+                    font_size=lyric_font,
                 ),
                 expand=True,
             ),

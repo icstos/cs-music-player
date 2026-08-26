@@ -6,12 +6,14 @@ import json
 from pathlib import Path
 
 from .audio_player import Track
+from .constants import LYRIC_FONT_DEFAULT, LYRIC_FONT_MAX, LYRIC_FONT_MIN
 
 FAVORITES_KEY = "favorite_tracks"
 RECENT_FOLDERS_KEY = "recent_folders"
 PINNED_FOLDERS_KEY = "pinned_folders"
 THEME_MODE_KEY = "theme_mode"
 LYRIC_OFFSETS_KEY = "lyric_offsets"
+LYRIC_FONT_KEY = "lyric_font"
 MAX_RECENT_FOLDERS = 8
 
 
@@ -122,3 +124,20 @@ async def save_lyric_offset(prefs, key: str, offset: float) -> None:
     else:
         offsets[key] = round(float(offset), 3)
     await prefs.set(LYRIC_OFFSETS_KEY, json.dumps(offsets, ensure_ascii=False))
+
+
+async def load_lyric_font(prefs) -> float:
+    """读取歌词字号（全局设置），非法值回退为默认字号。"""
+    raw = await prefs.get(LYRIC_FONT_KEY)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return LYRIC_FONT_DEFAULT
+    if not (LYRIC_FONT_MIN <= value <= LYRIC_FONT_MAX):
+        return LYRIC_FONT_DEFAULT
+    return value
+
+
+async def save_lyric_font(prefs, size: float) -> None:
+    """保存歌词字号（全局设置）。"""
+    await prefs.set(LYRIC_FONT_KEY, float(size))
