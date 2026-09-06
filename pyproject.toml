@@ -2,6 +2,9 @@
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["cs_music_player"]
+
 [project]
 name = "cs-music-player"
 version = "0.0.0"
@@ -9,8 +12,9 @@ description = "CS Music Player - dependencies moved from requirements.txt"
 requires-python = ">=3.12"
 authors = [{name = "Your Name", email = "you@example.com"}]
 dependencies = [
-    "flet>=0.85.3",
-    "flet-audio>=0.85.3",
+    "flet>=0.85.6",
+    "flet-audio>=0.85.6",
+    "miniaudio>=1.71",
     "mutagen>=1.47",
 ]
 
