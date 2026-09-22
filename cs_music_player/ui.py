@@ -9,6 +9,8 @@ import flet as ft
 from .audio_player import Track
 from .constants import (
     LYRIC_FONT_DEFAULT,
+    LYRIC_ROW_FACTOR,
+    LYRIC_ROW_GAP,
     MODE_ICONS,
     SPEED_PRESETS,
     palette,
@@ -807,11 +809,38 @@ def PlayerBar(
 # ── 歌词面板 ── #
 
 
+def _lyric_row_height(font_size: float) -> float:
+    """统一的歌词行高：装得下「放大一号后的当前行」折两行，再留出呼吸空间。"""
+    return round(font_size * LYRIC_ROW_FACTOR + LYRIC_ROW_GAP, 1)
+
+
+def _lyric_window_rows(viewport_height: float, row_height: float) -> int:
+    """歌词区能容纳的行数，恒取奇数——偶数行会让当前行偏离中线半行。"""
+    rows = int(viewport_height // row_height) if row_height > 0 else 1
+    if rows % 2 == 0:
+        rows -= 1
+    return max(1, rows)
+
+
+def _lyric_window(active: int, total: int, rows: int) -> list[int | None]:
+    """以当前行为中心的歌词窗口，``None`` 是越界处的空白占位行。
+
+    窗口行数固定为奇数、当前行置于正中，开头/结尾的歌词便同样停在区域中线上。
+    """
+    half = (rows - 1) // 2
+    focus = active if active >= 0 else 0
+    return [
+        index if 0 <= index < total else None
+        for index in range(focus - half, focus + half + 1)
+    ]
+
+
 @ft.component
 def LyricsLine(
     text: str,
     is_current: bool,
     font_size: float = LYRIC_FONT_DEFAULT,
+    row_height: float = 0.0,
 ) -> ft.Control:
     size = font_size + 3 if is_current else font_size
     return ft.Container(
@@ -824,8 +853,9 @@ def LyricsLine(
             max_lines=2,
             overflow=ft.TextOverflow.ELLIPSIS,
         ),
+        height=row_height or None,
         alignment=ft.Alignment.CENTER,
-        padding=ft.Padding.symmetric(vertical=6 if is_current else 4),
+        padding=ft.Padding.symmetric(horizontal=28),
         animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
     )
 
@@ -838,10 +868,23 @@ def LyricsPanel(
     offset: float = 0.0,
     font_size: float = LYRIC_FONT_DEFAULT,
 ) -> ft.Control:
+    """歌词面板：正在播放的那一行始终停在歌词区垂直中线上。
+
+    只渲染「当前行 ± 半屏」的窗口并按中线排布，所以首尾歌词也能居中；
+    窗口行数由歌词区实测高度推算（``on_size_change``），随窗口尺寸自适应。
+    """
+    viewport_height, set_viewport_height = ft.use_state(0.0)
+
     active = current_line_index(lines, position, offset)
+    row_height = _lyric_row_height(font_size)
+    window = _lyric_window(
+        active,
+        len(lines),
+        _lyric_window_rows(viewport_height, row_height),
+    )
 
     if not has_lyrics_file:
-        body = ft.Container(
+        body: ft.Control = ft.Container(
             content=ft.Column(
                 [
                     ft.Icon(ft.Icons.SUBTITLES_OUTLINED, size=36, color=palette.TEXT_MUTED),
@@ -861,20 +904,32 @@ def LyricsPanel(
             alignment=ft.Alignment.CENTER,
         )
     else:
-        body = ft.Container(
-            content=ft.ListView(
-                controls=[
-                    LyricsLine(line.text, i == active, font_size)
-                    for i, line in enumerate(lines)
-                ],
-                spacing=2,
-                padding=ft.Padding.symmetric(horizontal=28, vertical=8),
-                expand=True,
-            ),
+        body = ft.Column(
+            controls=[
+                (
+                    LyricsLine(lines[index].text, index == active, font_size, row_height)
+                    if index is not None
+                    else ft.Container(height=row_height)
+                )
+                for index in window
+            ],
+            spacing=0,
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             expand=True,
         )
 
-    return body
+    def on_size_change(e) -> None:
+        """记录歌词区实测高度，用以推算窗口行数。"""
+        if abs(e.height - viewport_height) > 0.5:
+            set_viewport_height(e.height)
+
+    return ft.Container(
+        content=body,
+        expand=True,
+        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        on_size_change=on_size_change,
+    )
 
 
 # ── 睡眠定时器 ── #
@@ -1030,7 +1085,6 @@ def _offset_label(offset: float) -> str:
     return f"{direction} {abs(round(offset, 3)):g}s"
 
 
-@ft.component
 @ft.component
 def LyricSettingsEntry(
     offset: float,

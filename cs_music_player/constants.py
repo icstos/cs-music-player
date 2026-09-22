@@ -33,6 +33,12 @@ LYRIC_FONT_DEFAULT = 15.0
 LYRIC_FONT_MIN = 11.0
 LYRIC_FONT_MAX = 24.0
 
+#: 歌词行高 = 字号 × LYRIC_ROW_FACTOR + LYRIC_ROW_GAP。
+#: 系数按「当前行放大一号后仍能折两行」估算，行间留出 LYRIC_ROW_GAP 的呼吸空间。
+#: 所有行等高，是「当前行落在歌词区中线」的前提（行高不齐就得逐行量像素）。
+LYRIC_ROW_FACTOR = 2.9
+LYRIC_ROW_GAP = 14.0
+
 # ── 调色板（亮 / 暗两套，键名保持一致）── #
 _LIGHT_PALETTE = {
     "PRIMARY": "#2563eb",
