@@ -8,9 +8,10 @@ import flet as ft
 
 from .audio_player import Track
 from .constants import (
+    LYRIC_ACTIVE_DELTA,
     LYRIC_FONT_DEFAULT,
-    LYRIC_ROW_FACTOR,
-    LYRIC_ROW_GAP,
+    LYRIC_LINE_FACTOR,
+    LYRIC_ROW_GAP_RATIO,
     MODE_ICONS,
     SPEED_PRESETS,
     palette,
@@ -816,14 +817,45 @@ def PlayerBar(
 # ── 歌词面板 ── #
 
 
+def _lyric_active_font_size(font_size: float) -> float:
+    """正在播放的行的字号（比普通行大一号）。"""
+    return font_size + LYRIC_ACTIVE_DELTA
+
+
 def _lyric_row_height(font_size: float) -> float:
-    """统一的歌词行高：装得下「放大一号后的当前行」折两行，再留出呼吸空间。"""
-    return round(font_size * LYRIC_ROW_FACTOR + LYRIC_ROW_GAP, 1)
+    """普通歌词行的高度：一行文本的天然高度 + 行间留白（字号 × 2）。"""
+    return round(font_size * (LYRIC_LINE_FACTOR + LYRIC_ROW_GAP_RATIO), 1)
 
 
-def _lyric_window_rows(viewport_height: float, row_height: float) -> int:
-    """歌词区能容纳的行数，恒取奇数——偶数行会让当前行偏离中线半行。"""
-    rows = int(viewport_height // row_height) if row_height > 0 else 1
+def _lyric_active_pad(font_size: float) -> float:
+    """当前行的上下留白：让「放大后只占一行」的当前行与普通行等高。"""
+    line_height = _lyric_active_font_size(font_size) * LYRIC_LINE_FACTOR
+    return max(0.0, round((_lyric_row_height(font_size) - line_height) / 2, 1))
+
+
+def _lyric_active_row_height(font_size: float) -> float:
+    """当前行的最大高度：放大后的当前行折两行时的高度（含上下留白）。
+
+    当前行按内容自适应高度（折行才不会被裁），这里给的是它可能达到的上限，
+    用来为「窗口行数」预留余量。
+    """
+    line_height = _lyric_active_font_size(font_size) * LYRIC_LINE_FACTOR
+    return round(line_height * 2 + _lyric_active_pad(font_size) * 2, 1)
+
+
+def _lyric_window_rows(
+    viewport_height: float,
+    row_height: float,
+    active_row_height: float = 0.0,
+) -> int:
+    """歌词区能容纳的行数，恒取奇数——偶数行会让当前行偏离中线半行。
+
+    当前行可能因折行而比普通行高，先扣掉这段余量，避免整组溢出歌词区。
+    """
+    if row_height <= 0:
+        return 1
+    spare = max(0.0, active_row_height - row_height)
+    rows = int(max(0.0, viewport_height - spare) // row_height)
     if rows % 2 == 0:
         rows -= 1
     return max(1, rows)
@@ -849,7 +881,20 @@ def LyricsLine(
     font_size: float = LYRIC_FONT_DEFAULT,
     row_height: float = 0.0,
 ) -> ft.Control:
-    size = font_size + 3 if is_current else font_size
+    """一行歌词。
+
+    普通行固定为一行高（``row_height``，超出以 ``…`` 收尾）；当前行放大一号
+    并按内容自适应高度（最多两行），因此折行不会被裁——它多出来的那点高度由
+    上下留白补齐，没折行时恰好与普通行等高。
+    """
+    if is_current:
+        size = _lyric_active_font_size(font_size)
+        pad = _lyric_active_pad(font_size)
+        height, max_lines = None, 2
+    else:
+        size = font_size
+        pad = 0.0
+        height, max_lines = row_height or None, 1
     return ft.Container(
         content=ft.Text(
             text,
@@ -857,12 +902,12 @@ def LyricsLine(
             weight=ft.FontWeight.W_700 if is_current else ft.FontWeight.NORMAL,
             color=palette.PRIMARY if is_current else palette.TEXT_MUTED,
             text_align=ft.TextAlign.CENTER,
-            max_lines=2,
+            max_lines=max_lines,
             overflow=ft.TextOverflow.ELLIPSIS,
         ),
-        height=row_height or None,
+        height=height,
         alignment=ft.Alignment.CENTER,
-        padding=ft.Padding.symmetric(horizontal=28),
+        padding=ft.Padding.symmetric(horizontal=28, vertical=pad),
         animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
     )
 
@@ -878,7 +923,8 @@ def LyricsPanel(
     """歌词面板：正在播放的那一行始终停在歌词区垂直中线上。
 
     只渲染「当前行 ± 半屏」的窗口并按中线排布，所以首尾歌词也能居中；
-    窗口行数由歌词区实测高度推算（``on_size_change``），随窗口尺寸自适应。
+    普通行等高（因而当前行上下两半的行数相等，居中才精确），窗口行数由歌词区
+    实测高度推算（``on_size_change``），随窗口尺寸与字号自适应。
     """
     viewport_height, set_viewport_height = ft.use_state(0.0)
 
@@ -887,7 +933,11 @@ def LyricsPanel(
     window = _lyric_window(
         active,
         len(lines),
-        _lyric_window_rows(viewport_height, row_height),
+        _lyric_window_rows(
+            viewport_height,
+            row_height,
+            _lyric_active_row_height(font_size),
+        ),
     )
 
     if not has_lyrics_file:

@@ -33,11 +33,19 @@ LYRIC_FONT_DEFAULT = 15.0
 LYRIC_FONT_MIN = 11.0
 LYRIC_FONT_MAX = 24.0
 
-#: 歌词行高 = 字号 × LYRIC_ROW_FACTOR + LYRIC_ROW_GAP。
-#: 系数按「当前行放大一号后仍能折两行」估算，行间留出 LYRIC_ROW_GAP 的呼吸空间。
-#: 所有行等高，是「当前行落在歌词区中线」的前提（行高不齐就得逐行量像素）。
-LYRIC_ROW_FACTOR = 2.9
-LYRIC_ROW_GAP = 14.0
+#: 字体自带的单行高度比例：一个 size 号的文本行占 size × LYRIC_LINE_FACTOR 高。
+#: 实测 AlibabaPuHuiTi（多行文本相邻行中心距 ÷ 字号 ≈ 1.40），与字体
+#: hhea 的 asc 1060 + desc 340 / upem 1000 = 1.4 一致。
+LYRIC_LINE_FACTOR = 1.4
+
+#: 相邻两行歌词之间额外的呼吸空间，按字号比例给出。
+#: 于是普通行高 = 字号 × (1.4 + 0.6) = 字号 × 2 —— 比「每行都预留折行后的两行高度」
+#: 紧凑得多，同时仍留出 ≈0.6 字号的空白。所有普通行等高，是「当前行落在歌词区
+#: 中线」的前提（行高不齐就得逐行量像素）。
+LYRIC_ROW_GAP_RATIO = 0.6
+
+#: 正在播放的行相对基准字号的放大增量（比普通行大一号以示强调）。
+LYRIC_ACTIVE_DELTA = 3.0
 
 # ── 调色板（亮 / 暗两套，键名保持一致）── #
 _LIGHT_PALETTE = {
