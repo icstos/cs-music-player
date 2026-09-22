@@ -129,8 +129,8 @@ cs-music-player/
 
 | 依赖 | 用途 |
 |------|------|
-| [flet](https://flet.dev/) ≥ 0.86 | 声明式 UI 框架（`@ft.component`、`use_state`、`use_effect`） |
-| [flet-audio](https://pypi.org/project/flet-audio/) ≥ 0.86 | 音频播放 |
+| [flet](https://flet.dev/) ≥ 1.0.0 | 声明式 UI 框架（`@ft.component`、`use_state`、`use_effect`） |
+| [flet-audio](https://pypi.org/project/flet-audio/) ≥ 1.0.0 | 音频播放 |
 | [mutagen](https://pypi.org/project/mutagen/) ≥ 1.47 | 读取时长、标签（歌手/专辑）、采样率/码率、内嵌封面 |
 | [pytest](https://docs.pytest.org/) ≥ 8.0 | 单元测试（dev 组） |
 
@@ -168,6 +168,30 @@ uv run python scripts/smoke_test.py
 from cs_music_player import Player, Track, load_tracks_from_directory
 from cs_music_player.constants import SUPPORTED_FORMATS, MODE_SEQUENCE, palette
 ```
+
+### 输入框边框（flet 1.x）
+
+`FormFieldControl`（`TextField`、`DropdownM2` 等）的 `border_color`、`border_width`、`border_radius`、
+`focused_border_color`、`focused_border_width` 自 flet 1.0 起**已弃用**，1.3.0 移除；统一改用 `border`：
+
+```python
+# 全状态同一形状、颜色交给主题按状态解析
+ft.TextField(border=ft.OutlineInputBorder(border_radius=8))
+
+# 需要指定各状态颜色时用状态字典（未给 side 的状态回落到 DEFAULT 的 side）
+ft.TextField(
+    border={
+        ft.ControlState.DEFAULT: ft.OutlineInputBorder(
+            border_radius=12, side=ft.BorderSide(1, palette.BORDER)
+        ),
+        ft.ControlState.FOCUSED: ft.OutlineInputBorder(
+            border_radius=12, side=ft.BorderSide(2, palette.PRIMARY_LIGHT)
+        ),
+    }
+)
+```
+
+边框对象在组件构建时创建，颜色需直接读 `palette.*`（不要提到模块级常量，否则暗色主题切换不会更新）。
 
 ## 许可证
 

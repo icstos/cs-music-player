@@ -354,11 +354,18 @@ def Sidebar(
                     on_blur=lambda e: on_search_blur(),
                     hint_text="搜索歌曲或文件夹",
                     prefix_icon=ft.Icons.SEARCH,
-                    border_radius=12,
+                    border={
+                        ft.ControlState.DEFAULT: ft.OutlineInputBorder(
+                            border_radius=12,
+                            side=ft.BorderSide(1, palette.BORDER),
+                        ),
+                        ft.ControlState.FOCUSED: ft.OutlineInputBorder(
+                            border_radius=12,
+                            side=ft.BorderSide(2, palette.PRIMARY_LIGHT),
+                        ),
+                    },
                     dense=True,
                     content_padding=ft.Padding.symmetric(horizontal=12, vertical=10),
-                    border_color=palette.BORDER,
-                    focused_border_color=palette.PRIMARY_LIGHT,
                     bgcolor=palette.SURFACE,
                 ),
                 ft.Row(
@@ -981,8 +988,8 @@ def build_sleep_dialog(
             width=66,
             dense=True,
             text_align=ft.TextAlign.CENTER,
-            border_radius=8,
             content_padding=ft.Padding.symmetric(horizontal=8, vertical=8),
+            border=ft.OutlineInputBorder(border_radius=8),
         )
 
     def start_custom(e: ft.ControlEvent) -> None:

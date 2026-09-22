@@ -20,6 +20,9 @@ docs
 .vscode
 uv.lock
 
+# AI
+.workbuddy
+
 # Python-generated files
 # 编译的字节码
 __pycache__/
