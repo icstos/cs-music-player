@@ -143,8 +143,8 @@ cs-music-player/
 
 | 依赖 | 用途 |
 |------|------|
-| [flet](https://flet.dev/) ≥ 1.0.0 | 声明式 UI 框架（`@ft.component`、`use_state`、`use_effect`） |
-| [flet-audio](https://pypi.org/project/flet-audio/) ≥ 1.0.0 | 音频播放 |
+| [flet](https://flet.dev/) ≥ 1.0.4 | 声明式 UI 框架（`@ft.component`、`use_state`、`use_effect`） |
+| [flet-audio](https://pypi.org/project/flet-audio/) ≥ 1.0.4 | 音频播放 |
 | [mutagen](https://pypi.org/project/mutagen/) ≥ 1.47 | 读取时长、标签（歌手/专辑）、采样率/码率、内嵌封面 |
 | [pytest](https://docs.pytest.org/) ≥ 8.0 | 单元测试（dev 组） |
 
