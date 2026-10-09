@@ -47,6 +47,14 @@ LYRIC_ROW_GAP_RATIO = 0.6
 #: 正在播放的行相对基准字号的放大增量（比普通行大一号以示强调）。
 LYRIC_ACTIVE_DELTA = 3.0
 
+# ── 桌面歌词（悬浮窗）── #
+#: 桌面歌词的字号范围比主界面歌词面板宽得多：它是「隔着桌面看」的，默认就要大
+#: 一号，且允许放得更大。
+DESKTOP_LYRIC_FONT_DEFAULT = 26.0
+DESKTOP_LYRIC_FONT_MIN = 16.0
+DESKTOP_LYRIC_FONT_MAX = 56.0
+DESKTOP_LYRIC_FONT_STEP = 2.0
+
 # ── 调色板（亮 / 暗两套，键名保持一致）── #
 _LIGHT_PALETTE = {
     "PRIMARY": "#2563eb",

@@ -15,6 +15,8 @@ from .audio_player import (
     resolve_startup_load,
 )
 from .constants import (
+    DESKTOP_LYRIC_FONT_DEFAULT,
+    DESKTOP_LYRIC_FONT_STEP,
     LYRIC_FONT_DEFAULT,
     LYRIC_FONT_MAX,
     LYRIC_FONT_MIN,
@@ -24,10 +26,12 @@ from .constants import (
     build_light_theme,
     palette,
 )
+from .desktop_lyrics import DesktopLyricConfig, DesktopLyrics
 from .lrclib import download_lyrics
-from .lyrics import load_lyrics
+from .lyrics import current_line_index, load_lyrics
 from .store import (
     apply_favorites,
+    load_desktop_lyric,
     load_favorites,
     load_lyric_font,
     load_lyric_offsets,
@@ -36,6 +40,7 @@ from .store import (
     load_theme_mode,
     normalize_folder_path,
     push_recent_folder,
+    save_desktop_lyric,
     save_favorites,
     save_lyric_font,
     save_lyric_offset,
@@ -46,6 +51,7 @@ from .store import (
     track_key,
 )
 from .ui import (
+    DesktopLyricButton,
     MainStage,
     PlayerBar,
     Sidebar,
@@ -115,6 +121,9 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     lyrics, set_lyrics = ft.use_state(list())
     lyric_offset, set_lyric_offset = ft.use_state(0.0)
     lyric_font, set_lyric_font = ft.use_state(LYRIC_FONT_DEFAULT)
+    desktop_enabled, set_desktop_enabled = ft.use_state(False)
+    desktop_locked, set_desktop_locked = ft.use_state(False)
+    desktop_font, set_desktop_font = ft.use_state(DESKTOP_LYRIC_FONT_DEFAULT)
     search, set_search = ft.use_state("")
     show_favorites, set_show_favorites = ft.use_state(False)
     recent_folders, set_recent_folders = ft.use_state(list[str]())
@@ -130,6 +139,8 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
     folder_menu_ref = ft.use_ref(None)
     sleep_task_ref = ft.use_ref(None)
     sleep_dialog_ref = ft.use_ref(None)
+    desktop_ref = ft.use_ref(None)
+    desktop_snapshot = ft.use_ref(None)
 
     def sync_track_state(index: int) -> None:
         set_current(index)
@@ -141,12 +152,14 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         pinned = await load_pinned_folders(prefs)
         saved_mode = await load_theme_mode(prefs)
         saved_font = await load_lyric_font(prefs)
+        saved_desktop = await load_desktop_lyric(prefs)
         set_recent_folders(folders)
         set_pinned_folders(pinned)
         set_theme_mode_state(saved_mode)
         theme_mode_ref.current = saved_mode
         apply_theme_mode(saved_mode)
         set_lyric_font(saved_font)
+        apply_desktop_config(DesktopLyricConfig(**saved_desktop))
 
     def cycle_theme_mode(e: ft.ControlEvent) -> None:
         """工具栏切换按钮：light → dark → system 循环。"""
@@ -202,6 +215,11 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         page.services.append(picker)
         page.update()
         picker_ref.current = picker
+        desktop_ref.current = DesktopLyrics(
+            on_command=on_desktop_command,
+            on_config_change=on_desktop_config_change,
+        )
+        page.on_disconnect = shutdown_desktop_lyrics
 
     def get_prefs() -> ft.SharedPreferences:
         if prefs_ref.current is None:
@@ -209,6 +227,101 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         return prefs_ref.current
 
     ft.use_effect(setup, dependencies=[])
+
+    # —— 桌面歌词 —— #
+
+    async def run_desktop_command(name: str) -> None:
+        """悬浮窗上的播放控制键（跑在事件循环里，可以安全改状态）。"""
+        player = player_ref.current
+        if player is None:
+            return
+        if name == "toggle":
+            await player.toggle()
+        elif name == "next":
+            await player.next()
+        elif name == "prev":
+            await player.prev()
+
+    def on_desktop_command(name: str) -> None:
+        # 回调来自悬浮窗自己的线程，必须回到事件循环再驱动播放器。
+        page.run_task(run_desktop_command, name)
+
+    async def persist_desktop_config(config: DesktopLyricConfig) -> None:
+        set_desktop_enabled(config.enabled)
+        set_desktop_locked(config.locked)
+        set_desktop_font(config.font_size)
+        await save_desktop_lyric(
+            get_prefs(),
+            {
+                "enabled": config.enabled,
+                "locked": config.locked,
+                "font_size": config.font_size,
+                "x": config.x,
+                "y": config.y,
+            },
+        )
+
+    def on_desktop_config_change(config: DesktopLyricConfig) -> None:
+        page.run_task(persist_desktop_config, config)
+
+    def apply_desktop_config(config: DesktopLyricConfig) -> None:
+        """启动时把持久化设置灌回悬浮窗。"""
+        controller = desktop_ref.current
+        if controller is not None:
+            controller.apply_config(config)
+
+    def toggle_desktop_lyrics() -> None:
+        controller = desktop_ref.current
+        if controller is None:
+            return
+        enabling = not controller.config.enabled
+        if enabling and not lyrics:
+            notify("当前歌曲暂无歌词，换上带歌词的歌曲会自动显示")
+        controller.set_visible(enabling)
+
+    def toggle_desktop_lock() -> None:
+        controller = desktop_ref.current
+        if controller is None:
+            return
+        controller.set_locked(not controller.config.locked)
+
+    def step_desktop_font(direction: float) -> None:
+        controller = desktop_ref.current
+        if controller is None:
+            return
+        controller.nudge_font(DESKTOP_LYRIC_FONT_STEP * direction)
+
+    def reset_desktop_font() -> None:
+        controller = desktop_ref.current
+        if controller is not None:
+            controller.set_font_size(DESKTOP_LYRIC_FONT_DEFAULT)
+
+    def close_desktop_lyrics() -> None:
+        controller = desktop_ref.current
+        if controller is not None:
+            controller.set_visible(False)
+
+    def push_desktop_lyrics() -> None:
+        """把歌词与进度推给悬浮窗。
+
+        值一律从 :data:`desktop_snapshot` 里取，而不是用本闭包捕获的变量：flet 的
+        effect 是**异步调度执行**的，轮到自己时 ``hook.setup`` 很可能已经换成另一次
+        渲染的闭包——闭包捕获的歌词会是那一刻的旧值（甚至是还没加载时的空列表），
+        于是悬浮窗被误判成「无歌词」而隐藏。快照在渲染期同步刷新，谁最后执行都读到
+        最新值。
+        """
+        controller = desktop_ref.current
+        if controller is None:
+            return
+        texts, active, playing = desktop_snapshot.current
+        controller.set_lyrics(texts)
+        controller.set_active(active)
+        controller.set_playing(playing)
+
+    def shutdown_desktop_lyrics(e: ft.ControlEvent | None = None) -> None:
+        controller = desktop_ref.current
+        if controller is not None:
+            controller.stop()
 
     async def apply_tracks(
         files: list[Track],
@@ -234,15 +347,17 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
             )
             await save_recent_folders(prefs, folders)
             set_recent_folders(folders)
+        # 这里刻意不碰 lyrics：歌词的唯一来源是 refresh_lyrics（依赖 current /
+        # selected / tracks 重新加载）。本函数中间的 await 会让 flet 先跑一轮
+        # effect 把歌词填好，若在 await 之后再 set_lyrics([]) 就会把它清掉——
+        # 表现是「点开歌曲自动播放，歌词面板与桌面歌词都空白」。
         if autoplay and 0 <= play_index < len(files):
             set_position(0.0)
             set_duration(files[play_index].duration)
-            set_lyrics([])
             return
         set_current(-1)
         set_position(0.0)
         set_duration(files[play_index].duration if files else 0.0)
-        set_lyrics([])
         set_is_playing(False)
 
     def init_startup() -> None:
@@ -289,6 +404,11 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         page.run_task(run)
 
     ft.use_effect(sync_lyric_offset, [current, selected, tracks])
+
+    ft.use_effect(
+        push_desktop_lyrics,
+        [lyrics, position, is_playing, lyric_offset],
+    )
 
     def adjust_lyric_offset(delta: float) -> None:
         """歌词微调：正偏移提前显示，负偏移延后显示，并按曲目持久化。"""
@@ -485,6 +605,13 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
         search_focused_ref.current = False
 
     playing_track = tracks[current] if 0 <= current < len(tracks) else None
+
+    # 桌面歌词的最新快照，**在渲染期同步刷新**（见 push_desktop_lyrics 的说明）。
+    desktop_snapshot.current = (
+        [line.text for line in lyrics],
+        current_line_index(lyrics, position, lyric_offset),
+        is_playing,
+    )
     display_index = current if current >= 0 else selected
     track = tracks[display_index] if 0 <= display_index < len(tracks) else None
     has_lyrics = bool(track and track.lyrics_path)
@@ -655,6 +782,16 @@ def PlayerApp(page: ft.Page, startup_path: str | None = None) -> ft.Control:
                     italic=True,
                 ),
                 SleepTimerButton(sleep_remaining, open_sleep_dialog),
+                DesktopLyricButton(
+                    desktop_enabled,
+                    desktop_locked,
+                    desktop_font,
+                    toggle_desktop_lyrics,
+                    toggle_desktop_lock,
+                    step_desktop_font,
+                    reset_desktop_font,
+                    close_desktop_lyrics,
+                ),
                 ft.IconButton(
                     icon=theme_icon,
                     icon_color=palette.TEXT_DIM,

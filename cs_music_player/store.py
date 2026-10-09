@@ -6,7 +6,14 @@ import json
 from pathlib import Path
 
 from .audio_player import Track
-from .constants import LYRIC_FONT_DEFAULT, LYRIC_FONT_MAX, LYRIC_FONT_MIN
+from .constants import (
+    DESKTOP_LYRIC_FONT_DEFAULT,
+    DESKTOP_LYRIC_FONT_MAX,
+    DESKTOP_LYRIC_FONT_MIN,
+    LYRIC_FONT_DEFAULT,
+    LYRIC_FONT_MAX,
+    LYRIC_FONT_MIN,
+)
 
 FAVORITES_KEY = "favorite_tracks"
 RECENT_FOLDERS_KEY = "recent_folders"
@@ -14,6 +21,7 @@ PINNED_FOLDERS_KEY = "pinned_folders"
 THEME_MODE_KEY = "theme_mode"
 LYRIC_OFFSETS_KEY = "lyric_offsets"
 LYRIC_FONT_KEY = "lyric_font"
+DESKTOP_LYRIC_KEY = "desktop_lyric"
 MAX_RECENT_FOLDERS = 8
 
 
@@ -141,3 +149,58 @@ async def load_lyric_font(prefs) -> float:
 async def save_lyric_font(prefs, size: float) -> None:
     """保存歌词字号（全局设置）。"""
     await prefs.set(LYRIC_FONT_KEY, float(size))
+
+
+async def load_desktop_lyric(prefs) -> dict:
+    """读取桌面歌词设置。
+
+    返回 ``{"enabled": bool, "locked": bool, "font_size": float,
+    "x": float | None, "y": float | None}``；缺失或损坏的字段按默认值补齐。
+    """
+    raw = None
+    try:
+        raw = await prefs.get(DESKTOP_LYRIC_KEY)
+    except Exception:
+        raw = None
+    data: dict = {}
+    if isinstance(raw, str) and raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                data = parsed
+        except (TypeError, ValueError):
+            data = {}
+
+    def _number(key: str) -> float | None:
+        value = data.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+        return None
+
+    font = _number("font_size")
+    if font is None or not (
+        DESKTOP_LYRIC_FONT_MIN <= font <= DESKTOP_LYRIC_FONT_MAX
+    ):
+        font = DESKTOP_LYRIC_FONT_DEFAULT
+
+    return {
+        "enabled": bool(data.get("enabled", False)),
+        "locked": bool(data.get("locked", False)),
+        "font_size": font,
+        "x": _number("x"),
+        "y": _number("y"),
+    }
+
+
+async def save_desktop_lyric(prefs, settings: dict) -> None:
+    """保存桌面歌词设置（整体覆盖）。"""
+    payload = {
+        "enabled": bool(settings.get("enabled", False)),
+        "locked": bool(settings.get("locked", False)),
+        "font_size": float(
+            settings.get("font_size", DESKTOP_LYRIC_FONT_DEFAULT)
+        ),
+        "x": settings.get("x"),
+        "y": settings.get("y"),
+    }
+    await prefs.set(DESKTOP_LYRIC_KEY, json.dumps(payload, ensure_ascii=False))
