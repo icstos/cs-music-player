@@ -3,7 +3,7 @@
 **为什么不用 flet 再开一个窗口**：flet 1.0 的桌面端仍不支持从 Python 侧创建第二个
 原生窗口（官方在等 flutter/flutter#142845），现成的多视图机制是给 Web 会话用的。
 而桌面歌词要的「独立悬浮 + 置顶 + 鼠标穿透」恰好是 Win32 分层窗口的强项，于是这里
-用 ctypes 直接建窗，用 Pillow 画帧（见 :mod:`cs_music_player.desktop_lyric_render`）。
+用 ctypes 直接建窗，用 Pillow 画帧（见 :mod:`cs_music_player.infra.desktop_lyric.render`）。
 
 关键取舍：
 
@@ -25,12 +25,13 @@ import sys
 import threading
 import time
 from ctypes import wintypes
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
-from .desktop_lyric_render import (
+from ...models import DesktopLyricConfig, clamp_desktop_lyric_font
+
+from .render import (
     FONT_SIZE_DEFAULT,
-    FONT_SIZE_MAX,
-    FONT_SIZE_MIN,
     FONT_SIZE_STEP,
     Frame,
     render_frame,
@@ -53,23 +54,6 @@ MAX_WIDTH_RATIO = 0.72
 
 
 # ── 状态与对外配置 ── #
-
-
-@dataclass
-class DesktopLyricConfig:
-    """桌面歌词的持久化配置。"""
-
-    enabled: bool = False
-    locked: bool = False
-    font_size: float = FONT_SIZE_DEFAULT
-    #: 窗口左上角（物理像素，屏幕坐标）；``None`` 表示用默认位置。
-    x: float | None = None
-    y: float | None = None
-
-    def clamp_font(self) -> None:
-        self.font_size = round(
-            min(FONT_SIZE_MAX, max(FONT_SIZE_MIN, float(self.font_size))), 1
-        )
 
 
 @dataclass
@@ -403,7 +387,7 @@ def _enable_dpi_awareness() -> None:
 class _Surface:
     """一块 32 位 top-down DIB + 其内存 DC，用于交给 ``UpdateLayeredWindow``。"""
 
-    def __init__(self, screen_dc) -> None:
+    def __init__(self, screen_dc: int) -> None:
         self._screen_dc = screen_dc
         self.hdc = _gdi32.CreateCompatibleDC(screen_dc)
         self.hbitmap = None
@@ -452,8 +436,11 @@ class _Surface:
             self.hdc = None
 
 
-class DesktopLyrics:
+class DesktopLyricWindow:
     """桌面歌词悬浮窗。
+
+    结构上满足 :class:`cs_music_player.infra.ports.DesktopLyricPort` 协议
+    （见 :mod:`cs_music_player.infra.ports`）。
 
     对外只有「设状态」和「设配置」两组方法，全部线程安全，可以从 flet 的回调里
     直接调用；窗口自身跑在一个独立线程上。
@@ -465,6 +452,7 @@ class DesktopLyrics:
     - ``on_config_change(config)``：锁定状态、字号或位置变了，宿主负责持久化。
     """
 
+    #: 契约：本类结构上满足 :class:`cs_music_player.infra.ports.DesktopLyricPort`。
     CLASS_NAME = "CSMusicDesktopLyricWindow"
     WINDOW_TITLE = "CS 桌面歌词"
 
@@ -472,8 +460,8 @@ class DesktopLyrics:
         self,
         *,
         config: DesktopLyricConfig | None = None,
-        on_command=None,
-        on_config_change=None,
+        on_command: Callable[[str], None] | None = None,
+        on_config_change: Callable[[DesktopLyricConfig], None] | None = None,
         font_path: str | None = None,
     ) -> None:
         if font_path:
@@ -535,7 +523,7 @@ class DesktopLyrics:
 
     # —— 视图状态（线程安全）—— #
 
-    def set_lyrics(self, lines: list[str]) -> None:
+    def set_lyrics(self, lines: Sequence[str]) -> None:
         with self._lock:
             if lines == self._view.lines:
                 return
@@ -595,9 +583,7 @@ class DesktopLyrics:
 
     def set_font_size(self, size: float) -> None:
         config = self._config
-        config.font_size = round(
-            min(FONT_SIZE_MAX, max(FONT_SIZE_MIN, float(size))), 1
-        )
+        config.font_size = clamp_desktop_lyric_font(size)
         with self._lock:
             self._view.font_size = config.font_size
         self._refresh_window()
@@ -670,7 +656,9 @@ class DesktopLyrics:
         top = work.bottom - height - DEFAULT_BOTTOM_MARGIN
         return int(left), int(top)
 
-    def _clamp_to_work_area(self, left: int, top: int, width: int, height: int):
+    def _clamp_to_work_area(
+        self, left: int, top: int, width: int, height: int
+    ) -> tuple[int, int]:
         """把窗口位置夹回可见工作区，避免换分辨率后歌词跑到屏幕外。"""
         monitor = _user32.MonitorFromPoint(
             wintypes.POINT(int(left + width / 2), int(top + height / 2)), 2
@@ -766,7 +754,7 @@ class DesktopLyrics:
 
     # —— 内部：窗口消息 —— #
 
-    def _on_message(self, hwnd, msg, wparam, lparam) -> int:
+    def _on_message(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:
         try:
             if msg == WM_LYRIC_RENDER:
                 self._render()
@@ -821,7 +809,7 @@ class DesktopLyrics:
             traceback.print_exc()
         return _user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
-    def _on_mouse_move(self, hwnd, wparam, lparam) -> None:
+    def _on_mouse_move(self, hwnd: int, wparam: int, lparam: int) -> None:
         # 拖动由系统接管（WM_NCLBUTTONDOWN/HTCAPTION），此间若鼠标已松开就该
         # 认为拖动结束——不能只依赖 WM_EXITSIZEMOVE，否则光标会一直停在拖动样式。
         if not wparam & 0x0001:
@@ -842,7 +830,7 @@ class DesktopLyrics:
         y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
         self._set_hover(True, self._hit_test(x, y))
 
-    def _on_lbutton_down(self, hwnd, lparam) -> None:
+    def _on_lbutton_down(self, hwnd: int, lparam: int) -> None:
         x = ctypes.c_short(lparam & 0xFFFF).value
         y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
         hit = self._hit_test(x, y)
@@ -857,7 +845,7 @@ class DesktopLyrics:
         else:
             self._pressed_button = hit
 
-    def _on_lbutton_up(self, hwnd, lparam) -> None:
+    def _on_lbutton_up(self, hwnd: int, lparam: int) -> None:
         pressed, self._pressed_button = self._pressed_button, None
         if not pressed:
             return
@@ -866,7 +854,7 @@ class DesktopLyrics:
         if self._hit_test(x, y) == pressed:
             self._invoke(pressed)
 
-    def _on_set_cursor(self, hwnd, lparam) -> int:
+    def _on_set_cursor(self, hwnd: int, lparam: int) -> int:
         if lparam & 0xFFFF == HTCLIENT:
             point = wintypes.POINT()
             _user32.GetCursorPos(ctypes.byref(point))
@@ -901,7 +889,7 @@ class DesktopLyrics:
 
     # —— 内部：菜单与命令 —— #
 
-    def _popup_menu(self, hwnd) -> None:
+    def _popup_menu(self, hwnd: int) -> None:
         menu = _user32.CreatePopupMenu()
         flags_lock = MF_STRING | (MF_CHECKED if self._config.locked else 0)
         _user32.AppendMenuW(menu, flags_lock, CMD_LOCK, "锁定歌词（鼠标穿透）")
@@ -969,7 +957,7 @@ class DesktopLyrics:
             except Exception:
                 pass
 
-    def _remember_position(self, hwnd) -> None:
+    def _remember_position(self, hwnd: int) -> None:
         rect = RECT()
         _user32.GetWindowRect(hwnd, ctypes.byref(rect))
         self._config.x = float(rect.left)
@@ -978,7 +966,7 @@ class DesktopLyrics:
 
     # —— 内部：绘制 —— #
 
-    def _dpi_scale(self, hwnd) -> float:
+    def _dpi_scale(self, hwnd: int) -> float:
         try:
             dpi = _user32.GetDpiForWindow(hwnd)
             if dpi:
@@ -1105,7 +1093,7 @@ class DesktopLyrics:
         self._apply_visibility(hwnd)
         self._sync_hint_timer(hwnd)
 
-    def _apply_visibility(self, hwnd) -> None:
+    def _apply_visibility(self, hwnd: int) -> None:
         """显示 / 隐藏悬浮窗。
 
         没有歌词时整窗隐藏——留一个孤零零的「暂无歌词」飘在桌面上是纯噪音，
@@ -1119,7 +1107,7 @@ class DesktopLyrics:
         else:
             _user32.ShowWindow(hwnd, SW_HIDE)
 
-    def _sync_hint_timer(self, hwnd) -> None:
+    def _sync_hint_timer(self, hwnd: int) -> None:
         with self._lock:
             hint = self._view.hint
             deadline = self._view.hint_deadline
@@ -1130,7 +1118,7 @@ class DesktopLyrics:
 
     # —— 内部：锁定 —— #
 
-    def _apply_lock(self, hwnd) -> None:
+    def _apply_lock(self, hwnd: int) -> None:
         ex_style = _GetWindowLong(hwnd, GWL_EXSTYLE)
         ex_style |= WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
         with self._lock:

@@ -6,6 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
+__all__ = ["parse_startup_path"]
+
 
 def parse_startup_path(argv: list[str] | None = None) -> Path | None:
     """解析首个可用的启动路径（文件或目录）。"""

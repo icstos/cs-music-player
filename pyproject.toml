@@ -2,13 +2,13 @@
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["cs_music_player"]
+[tool.setuptools.packages.find]
+include = ["cs_music_player*"]
 
 [project]
 name = "cs-music-player"
 version = "0.0.0"
-description = "CS Music Player - dependencies moved from requirements.txt"
+description = "CS Music Player - a layered (MVVM + DIP) local music player built with Flet"
 requires-python = ">=3.12"
 authors = [{name = "Your Name", email = "you@example.com"}]
 dependencies = [
@@ -23,3 +23,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

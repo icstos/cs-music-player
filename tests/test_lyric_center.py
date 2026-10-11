@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from cs_music_player.constants import (
+from cs_music_player.models import (
     LYRIC_FONT_DEFAULT,
     LYRIC_FONT_MAX,
     LYRIC_FONT_MIN,
     LYRIC_LINE_FACTOR,
     LYRIC_ROW_GAP_RATIO,
 )
-from cs_music_player.ui import (
+from cs_music_player.view.components.lyrics import (
     _lyric_active_font_size,
     _lyric_active_pad,
     _lyric_active_row_height,

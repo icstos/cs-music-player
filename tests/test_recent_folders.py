@@ -1,47 +1,41 @@
+"""最近文件夹 / 固定文件夹：标准化、去重、置顶与上限。"""
+
 from __future__ import annotations
 
-from pathlib import Path
+import asyncio
 
-from cs_music_player.store import (
-    MAX_RECENT_FOLDERS,
-    load_theme_mode,
+from cs_music_player.models import MAX_RECENT_FOLDERS
+from cs_music_player.service.folders import (
+    FolderHistoryService,
     normalize_folder_path,
     push_recent_folder,
-    save_theme_mode,
     toggle_pinned_folder,
 )
 
+from fakes import FakePreferences
 
-class _FakePrefs:
-    def __init__(self) -> None:
-        self._data: dict = {}
 
-    async def get(self, key: str):
-        return self._data.get(key)
-
-    async def set(self, key: str, value) -> None:
-        self._data[key] = value
+def make_service(prefs: FakePreferences) -> FolderHistoryService:
+    return FolderHistoryService(prefs)
 
 
 def test_push_recent_folder_moves_existing_item_to_front() -> None:
     folders = ["C:/Music/B", "C:/Music/A", "C:/Music/C"]
     updated = push_recent_folder(folders, "C:/Music/A")
-    assert Path(updated[0]).name == "A"
     assert len(updated) == 3
     assert len(set(updated)) == 3
+    assert updated[0] == normalize_folder_path("C:/Music/A")
 
 
 def test_push_recent_folder_trims_history() -> None:
     folders = [f"C:/Music/{i}" for i in range(MAX_RECENT_FOLDERS + 2)]
     updated = push_recent_folder(folders, "C:/Music/new")
     assert len(updated) == MAX_RECENT_FOLDERS
-    assert Path(updated[0]).name == "new"
+    assert updated[0].endswith("new")
 
 
 def test_normalize_folder_path_resolves_and_standardizes() -> None:
-    assert normalize_folder_path("C:/Music/A") == normalize_folder_path(
-        "C:\\Music\\A"
-    )
+    assert normalize_folder_path("C:/Music/A") == normalize_folder_path("C:\\Music\\A")
 
 
 def test_toggle_pinned_folder_adds_and_removes() -> None:
@@ -58,21 +52,56 @@ def test_toggle_pinned_folder_deduplicates_variants() -> None:
     assert pinned == set()
 
 
+def test_recent_folder_roundtrip_through_service() -> None:
+    prefs = FakePreferences()
+    service = make_service(prefs)
+
+    async def flow() -> list[str]:
+        folders = await service.remember_folder("C:/Music/A")
+        return folders
+
+    assert asyncio.run(flow()) == [normalize_folder_path("C:/Music/A")]
+    assert asyncio.run(service.recent_folders()) == [
+        normalize_folder_path("C:/Music/A")
+    ]
+
+
+def test_clear_recent_folders_keeps_pinned() -> None:
+    prefs = FakePreferences()
+    service = make_service(prefs)
+
+    async def flow() -> tuple[list[str], set[str]]:
+        await service.remember_folder("C:/Music/A")
+        await service.toggle_pinned("C:/Music/A")
+        await service.clear_recent_folders()
+        return await service.recent_folders(), await service.pinned_folders()
+
+    recent, pinned = asyncio.run(flow())
+    assert recent == []
+    assert pinned == {normalize_folder_path("C:/Music/A")}
+
+
 def test_theme_mode_roundtrip() -> None:
-    import asyncio
+    from cs_music_player.models import ThemeMode
+    from cs_music_player.service.settings import SettingsService
 
-    prefs = _FakePrefs()
+    service = SettingsService(FakePreferences())
 
-    async def flow() -> str:
-        await save_theme_mode(prefs, "dark")
-        return await load_theme_mode(prefs)
+    async def flow() -> ThemeMode:
+        await service.save_theme_mode(ThemeMode.DARK)
+        return await service.theme_mode()
 
-    assert asyncio.run(flow()) == "dark"
+    assert asyncio.run(flow()) == ThemeMode.DARK
 
 
 def test_theme_mode_rejects_unknown_values() -> None:
-    import asyncio
+    from cs_music_player.models import ThemeMode
+    from cs_music_player.service.settings import SettingsService
 
-    prefs = _FakePrefs()
-    asyncio.run(save_theme_mode(prefs, "neon"))
-    assert asyncio.run(load_theme_mode(prefs)) == "system"
+    prefs = FakePreferences()
+
+    async def flow() -> ThemeMode:
+        await prefs.set("theme_mode", "neon")
+        return await SettingsService(prefs).theme_mode()
+
+    assert asyncio.run(flow()) == ThemeMode.SYSTEM

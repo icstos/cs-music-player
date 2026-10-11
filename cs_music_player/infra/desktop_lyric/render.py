@@ -6,7 +6,7 @@
 文件（``assets/fonts`` 里的 AlibabaPuHuiTi），还能顺手得到每个按钮的命中矩形。
 
 本模块**只负责画**，不碰任何 Win32，因此可以在任意平台上单测。窗口那一侧的
-事情（建窗、消息循环、鼠标穿透）在 :mod:`cs_music_player.desktop_lyrics`。
+事情（建窗、消息循环、鼠标穿透）在 :mod:`cs_music_player.infra.desktop_lyric.window`。
 
 版式规则（与主界面歌词面板同一套直觉，但为「悬浮在桌面上」而重新取值）：
 
@@ -25,16 +25,16 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
-from .constants import (
+from ...models import (
     DESKTOP_LYRIC_FONT_DEFAULT as FONT_SIZE_DEFAULT,
 )
-from .constants import (
+from ...models import (
     DESKTOP_LYRIC_FONT_MAX as FONT_SIZE_MAX,
 )
-from .constants import (
+from ...models import (
     DESKTOP_LYRIC_FONT_MIN as FONT_SIZE_MIN,
 )
-from .constants import (
+from ...models import (
     DESKTOP_LYRIC_FONT_STEP as FONT_SIZE_STEP,
 )
 
@@ -189,9 +189,9 @@ def _text_layer(
     center: tuple[float, float],
     text: str,
     font: ImageFont.FreeTypeFont,
-    fill,
+    fill: tuple[int, int, int, int],
     stroke_width: int = 0,
-    stroke_fill=None,
+    stroke_fill: tuple[int, int, int, int] | None = None,
 ) -> Image.Image:
     """把一行文字画到独立图层上（居中于 ``center``），便于单独做投影。"""
     layer = Image.new("RGBA", size, (0, 0, 0, 0))
@@ -247,8 +247,8 @@ def _rounded_panel(
     box: tuple[float, float, float, float],
     *,
     radius: float,
-    fill,
-    outline=None,
+    fill: tuple[int, int, int, int],
+    outline: tuple[int, int, int, int] | None = None,
     outline_width: int = 1,
     shadow_blur: float = 0.0,
     shadow_alpha: int = 0,
@@ -280,7 +280,10 @@ def _rounded_panel(
 
 
 def _draw_glyph(
-    draw: ImageDraw.ImageDraw, name: str, box: tuple[float, float, float, float], color
+    draw: ImageDraw.ImageDraw,
+    name: str,
+    box: tuple[float, float, float, float],
+    color: tuple[int, int, int, int],
 ) -> None:
     """在 ``box`` 内画一个居中图标。"""
     x0, y0, x1, y1 = box
@@ -395,7 +398,7 @@ def _draw_button_content(
     name: str,
     box: tuple[float, float, float, float],
     *,
-    color,
+    color: tuple[int, int, int, int],
     playing: bool,
 ) -> None:
     if name == "toggle":

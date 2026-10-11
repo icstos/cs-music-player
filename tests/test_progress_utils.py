@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cs_music_player.ui import _clamp_progress_value
+from cs_music_player.view.components.player_bar import _clamp_progress_value
 
 
 def test_clamp_progress_value_caps_to_slider_range() -> None:

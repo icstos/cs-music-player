@@ -1,20 +1,27 @@
-"""本地歌词：扫描 lyrics 目录、匹配曲目、解析 LRC。"""
+"""本地歌词的索引、匹配与解析（LRC / 纯文本）。
+
+对外只暴露 :class:`LocalLyricsRepository`，它实现
+:class:`cs_music_player.infra.ports.LyricsRepositoryPort`。
+"""
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections.abc import Mapping
 from pathlib import Path
 
-from .constants import SUPPORTED_LYRICS_FORMATS
+from ..models import LYRIC_EXTENSIONS, LyricLine
+
+__all__ = [
+    "LocalLyricsRepository",
+    "build_lyrics_index",
+    "load_lyrics",
+    "match_lyrics_path",
+    "parse_lrc",
+    "parse_plain_lyrics",
+]
 
 _LRC_TAG = re.compile(r"\[(\d+):(\d+)(?:\.(\d+))?[^\]]*\](.*)")
-
-
-@dataclass(frozen=True)
-class LyricLine:
-    time: float
-    text: str
 
 
 def build_lyrics_index(lyrics_dir: Path) -> dict[str, Path]:
@@ -23,16 +30,14 @@ def build_lyrics_index(lyrics_dir: Path) -> dict[str, Path]:
         return {}
     index: dict[str, Path] = {}
     for path in lyrics_dir.iterdir():
-        if path.is_file() and path.suffix.lower() in SUPPORTED_LYRICS_FORMATS:
+        if path.is_file() and path.suffix.lower() in LYRIC_EXTENSIONS:
             index[path.stem.lower()] = path
     return index
 
 
-def match_lyrics_path(
-    lyrics_index: dict[str, Path], track_stem: str
-) -> Path | None:
+def match_lyrics_path(index: Mapping[str, Path], track_stem: str) -> Path | None:
     """按曲目文件名（不含扩展名）匹配歌词文件。"""
-    return lyrics_index.get(track_stem.lower())
+    return index.get(track_stem.lower())
 
 
 def _timestamp_to_seconds(minutes: str, seconds: str, fractional: str | None) -> float:
@@ -73,18 +78,24 @@ def parse_plain_lyrics(content: str) -> list[LyricLine]:
     ]
 
 
-def load_lyrics(path: Path) -> list[LyricLine]:
-    """读取并解析歌词文件，失败时返回空列表。"""
+def _read_text(path: Path) -> str | None:
+    """按 UTF-8 读取，失败回退 GBK；再失败返回 ``None``。"""
     try:
-        text = path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         try:
-            text = path.read_text(encoding="gbk")
+            return path.read_text(encoding="gbk")
         except Exception:
-            return []
+            return None
     except Exception:
-        return []
+        return None
 
+
+def load_lyrics(path: Path) -> list[LyricLine]:
+    """读取并解析歌词文件，失败时返回空列表。"""
+    text = _read_text(path)
+    if text is None:
+        return []
     if path.suffix.lower() == ".lrc":
         parsed = parse_lrc(text)
         if parsed:
@@ -92,22 +103,17 @@ def load_lyrics(path: Path) -> list[LyricLine]:
     return parse_plain_lyrics(text)
 
 
-def current_line_index(
-    lines: list[LyricLine], position: float, offset: float = 0.0
-) -> int:
-    """根据当前播放位置返回应高亮的歌词行索引。
+class LocalLyricsRepository:
+    """基于本地文件系统的 :class:`LyricsRepositoryPort` 实现。"""
 
-    ``offset`` 为歌词微调偏移（秒）：正值使歌词提前显示，负值延后。
-    """
-    if not lines:
-        return -1
-    position += offset
-    if all(line.time == 0.0 for line in lines):
-        return 0
-    idx = -1
-    for i, line in enumerate(lines):
-        if line.time <= position:
-            idx = i
-        else:
-            break
-    return idx
+    def index(self, lyrics_dir: Path) -> dict[str, Path]:
+        """把歌词目录下的文件按「小写文件名」建索引。"""
+        return build_lyrics_index(lyrics_dir)
+
+    def match(self, index: Mapping[str, Path], stem: str) -> Path | None:
+        """按曲目文件名匹配歌词文件。"""
+        return match_lyrics_path(index, stem)
+
+    def read(self, path: Path) -> list[LyricLine]:
+        """读取并解析歌词文件；失败时返回空列表。"""
+        return load_lyrics(path)

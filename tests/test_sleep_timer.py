@@ -1,26 +1,11 @@
+"""睡眠定时器：倒计时回调与格式化。"""
+
 from __future__ import annotations
 
 import asyncio
 
-from cs_music_player.app import run_sleep_countdown
-from cs_music_player.ui import fmt_duration
-
-
-class _FakeWindow:
-    def __init__(self) -> None:
-        self.closed = False
-
-    async def close(self) -> None:
-        self.closed = True
-
-
-class _FakePage:
-    def __init__(self) -> None:
-        self.window = _FakeWindow()
-        self.tick_values: list[float] = []
-
-    def on_tick(self, value: float) -> None:
-        self.tick_values.append(value)
+from cs_music_player.service.sleep import SleepTimerService, run_sleep_countdown
+from cs_music_player.view.components.format import fmt_duration
 
 
 def test_fmt_duration_minutes_and_seconds() -> None:
@@ -41,13 +26,45 @@ def test_fmt_duration_clamps_negative() -> None:
 
 
 def test_sleep_countdown_ticks_and_completes() -> None:
+    ticks: list[float] = []
+
     async def run() -> None:
-        page = _FakePage()
-        await run_sleep_countdown(page, 2, page.on_tick)
-        return page
+        await run_sleep_countdown(2, ticks.append)
 
-    page = asyncio.run(run())
+    asyncio.run(run())
     # 每秒回调一次，剩余时间单调递减且为正
-    assert len(page.tick_values) >= 2
-    assert page.tick_values[0] > page.tick_values[-1] > 0
+    assert len(ticks) >= 2
+    assert ticks[0] > ticks[-1] > 0
 
+
+def test_sleep_service_fires_elapsed_once() -> None:
+    ticks: list[float] = []
+    elapsed: list[bool] = []
+
+    async def run() -> None:
+        service = SleepTimerService(ticks.append, lambda: elapsed.append(True))
+        service.start(2)
+        assert service.active
+        await asyncio.sleep(3.2)
+        assert not service.active
+        assert service.remaining == 0.0
+
+    asyncio.run(run())
+    assert len(ticks) >= 2
+    assert elapsed == [True]
+
+
+def test_sleep_service_cancel_resets_state() -> None:
+    ticks: list[float] = []
+    elapsed: list[bool] = []
+
+    async def run() -> None:
+        service = SleepTimerService(ticks.append, lambda: elapsed.append(True))
+        service.start(100)
+        service.cancel()
+        await asyncio.sleep(0.05)
+        assert not service.active
+        assert service.remaining == 0.0
+
+    asyncio.run(run())
+    assert elapsed == []

@@ -1,14 +1,17 @@
+"""LRCLIB 查询参数与候选记录打分（纯函数，离线）。"""
+
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
-from cs_music_player.audio_player import Track
-from cs_music_player.lrclib import (
-    _query_params,
-    _tag_value,
+from cs_music_player.infra.lyrics_provider import (
     detect_hanzi_style,
     pick_best,
+    query_params,
 )
+from cs_music_player.infra.metadata import _first_tag_value, _tag_value
+from cs_music_player.models import TagText, Track
 
 
 def test_pick_best_prefers_exact_synced_match() -> None:
@@ -84,21 +87,52 @@ def test_detect_hanzi_style() -> None:
 
 def test_query_params_falls_back_to_file_stem() -> None:
     track = Track(path=Path("周杰伦 - 晴天.mp3"), duration=240.0)
-    params = _query_params(track)
+    params = query_params(track)
     assert params["track_name"] == "周杰伦 - 晴天"
     assert params["duration"] == "240"
     assert "artist_name" not in params
 
 
+def test_query_params_prefers_embedded_tags() -> None:
+    """回归：检索用的是音频标签原文，没有标签才回退到文件名。"""
+    track = Track(path=Path("世界三大禁曲之一 忏魂曲.mp3"), duration=270.4)
+    tags = TagText(title="Room Of Angel", artist="Akira Yamaoka", album="Silent Hill 4")
+    params = query_params(track, tags)
+    assert params == {
+        "track_name": "Room Of Angel",
+        "artist_name": "Akira Yamaoka",
+        "album_name": "Silent Hill 4",
+        "duration": "270",
+    }
+
+
+def test_query_params_falls_back_when_tags_are_missing() -> None:
+    track = Track(path=Path("track.mp3"), duration=100.0)
+    assert query_params(track, TagText())["track_name"] == "track"
+
+
+def test_first_tag_value_returns_single_value_not_joined() -> None:
+    """多值标签取首值（与界面展示用的「A / B」拼接区分开）。"""
+    class Frame:
+        def __init__(self, text: Any) -> None:
+            self.text = text
+
+    tags = {"TPE1": Frame(["A", "B"]), "TIT2": Frame("Solo")}
+    assert _first_tag_value(tags, "TPE1") == "A"
+    assert _first_tag_value(tags, "TIT2") == "Solo"
+    assert _first_tag_value(tags, "TALB") == ""
+    assert _first_tag_value(None, "TPE1") == ""
+
+
 def test_query_params_drops_out_of_range_duration() -> None:
     track = Track(path=Path("no-duration.mp3"), duration=0.0)
-    params = _query_params(track)
+    params = query_params(track)
     assert "duration" not in params
 
 
 def test_tag_value_handles_frames_and_lists() -> None:
     class Frame:
-        def __init__(self, text):
+        def __init__(self, text: Any) -> None:
             self.text = text
 
     tags = {"TPE1": Frame(["周杰伦"]), "TIT2": Frame("晴天")}
@@ -106,3 +140,14 @@ def test_tag_value_handles_frames_and_lists() -> None:
     assert _tag_value(tags, "TIT2", "title", "\xa9nam") == "晴天"
     assert _tag_value(tags, "TALB", "album") == ""
     assert _tag_value(None, "TPE1") == ""
+
+
+def test_tag_value_joins_multiple_values_and_prefers_key_order() -> None:
+    class Frame:
+        def __init__(self, text: Any) -> None:
+            self.text = text
+
+    # 多值标签按原实现用 " / " 连接；候选键按顺序取第一个非空的
+    assert _tag_value({"TPE1": Frame(["A", "B"])}, "TPE1") == "A / B"
+    assert _tag_value({"artist": "C", "TPE1": Frame(["A"])}, "TPE1", "artist") == "A"
+    assert _tag_value({"artist": "C"}, "TPE1", "artist") == "C"

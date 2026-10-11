@@ -6,9 +6,12 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from PIL import Image
 
-from cs_music_player.desktop_lyric_render import (
+from cs_music_player.infra.desktop_lyric.render import (
+    Frame,
     BUTTON_SPECS,
     MIN_WIDTH,
     PAD_X,
@@ -28,7 +31,7 @@ NEXT_LINE = "喋喋不休 时不我予的哀愁"
 CURRENT, NEXT, SIZE = LINE, NEXT_LINE, 20.0
 
 
-def frame(**kwargs):
+def frame(**kwargs: Any) -> Frame:
     params = {
         "text": CURRENT,
         "next_text": NEXT,

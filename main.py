@@ -2,21 +2,20 @@
 
 「进程启动 → 窗口可见」这条路上，去掉 Python 自身的启动时间后，真正省不掉的
 只有三件事：``import flet``、``ft.run`` 里导入消息层、以及拉起客户端进程。
-剩下两块一次性开销则可以藏起来，实测约占 140ms：
+剩下两块一次性开销则可以藏起来，实测约省 140ms：
 
 - 业务模块导入（连带 flet_audio）≈ 43ms；
 - 首次 ``ft.Theme(...)`` 构造 ≈ 96ms——flet 把 ``flet.controls.theme`` 藏在包
-  的 ``__getattr__`` 后面惰性导入，一上来要加载 58 个模块。
+  级的 ``__getattr__`` 后面惰性导入，一上来要加载 58 个模块。
 
 桌面端外壳被拉起后，约 140ms 才回连注册、再约 90ms 才画出第一帧；这段时间
-Python 侧本来在空转（主线程正 ``await`` 客户端进程，GIL 是空的，后台线程能
+Python 侧本来在空转（主线程止于 ``await`` 客户端进程，GIL 是空的，后台线程能
 全速跑）。于是这里挂一个钩子，外壳一被拉起就在后台线程里把上面两块预热掉，
 等 ``before_main`` / ``main`` 真要用时基本都是现成的：``before_main``
-由 73ms 降到 14ms。实测「进程启动 → 窗口可见」由 0.68s 降到 0.60s（六轮
-交替对比，6/6 更快）。
+由 73ms 降到 14ms。实测「进程启动 → 窗口可见」由 0.68s 降到 0.60s。
 
 反过来，把这两块放进后台线程**并行导入**是没有意义的：模块导入是 GIL 绑定
-的，实测并行反而略慢（socket 层与 flet_desktop 串行 207ms，并行 220ms+）。
+的，实测并行反而略慢。
 
 窗口参数仍然必须在注册阶段（``before_main``）就定下来：外壳会先用默认尺寸
 （1280×720）、默认位置建窗，晚设就会「左上角闪一下再跳尺寸」。
@@ -26,11 +25,12 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from typing import Any
 from contextlib import suppress
 
 import flet as ft
 
-from cs_music_player.startup import parse_startup_path
+from cs_music_player.infra.startup_args import parse_startup_path
 
 STARTUP_PATH = parse_startup_path()
 
@@ -39,24 +39,24 @@ WINDOW_HEIGHT = 780
 WINDOW_MIN_WIDTH = 900
 WINDOW_MIN_HEIGHT = 640
 
-# 等待客户端「可以显示窗口」的上限：正常远低于此值，
-# 仅用于避免极端情况下窗口一直不出现。
+#: 等待客户端「可以显示窗口」的上限：正常远低于此值，
+#: 仅用于避免极端情况下窗口一直不出现。
 REVEAL_TIMEOUT = 5.0
 
 
 def prewarm() -> None:
     """导入业务模块并构造一次主题。
 
-    两块都是纯粹的一次性开销（模块导入 + flet 的惰性导入），提前做掉不改变
+    两块都是纯补的一次性开销（模块导入 + flet 的惰性导入），提前做掉不改变
     任何运行期行为；重复调用也无副作用（``sys.modules`` 已缓存，主题构造在
     热态只要 0.01ms）。
     """
 
-    from cs_music_player import constants as constants_module
-    from cs_music_player.app import PlayerApp  # noqa: F401  仅为预热导入
+    from cs_music_player.bootstrap import build_view_model  # noqa: F401  预热导入
+    from cs_music_player.view import theme as theme_module
 
-    constants_module.build_light_theme()
-    constants_module.build_dark_theme()
+    theme_module.build_light_theme()
+    theme_module.build_dark_theme()
 
 
 def install_prewarm_hook() -> bool:
@@ -72,7 +72,9 @@ def install_prewarm_hook() -> bool:
 
         original = flet_desktop.open_flet_view_async
 
-        async def open_flet_view_async_with_prewarm(*args, **kwargs):
+        async def open_flet_view_async_with_prewarm(
+            *args: Any, **kwargs: Any
+        ) -> Any:
             view = await original(*args, **kwargs)
             # 此刻外壳进程已经起来、正在初始化 Flutter，而 Python 侧要等它
             # 回连才会被回调——正是预热的好时机。
@@ -96,16 +98,14 @@ def configure_window(page: ft.Page) -> None:
     桌面端外壳会先用默认尺寸（1280×720）、默认位置（屏幕左上角）建一个窗口，
     等 Python 端连上才改成目标尺寸。若这时窗口已经可见，用户看到的就是
     「左上角闪一下、再跳成正常窗口」。
+
     因此这里做两件事：
 
     1. ``visible = False`` —— 窗口先不露出，等首帧内容画好再由
        :func:`reveal_window` 一次性显示；
-    2. 立刻塞一个与主题同色的占位页 —— 客户端在「还没有页面」时会先画出白底
+    2. 立刻填一个与主题同色的占位页 —— 客户端在「还没有页面」时会先画出白底
        Flet logo 的等待页，显示瞬间可能露出 1~3 帧；有占位页时实测 4/5 次
        首帧就是完整界面。
-
-    实测（见 .workbuddy/probe/phase_wrap.py）：这样改完后窗口只出现一次，
-    且首次出现的画面就是完整界面，不再有 1280×720 的空白窗口一闪。
     """
 
     if not HOOK_INSTALLED:
@@ -113,9 +113,8 @@ def configure_window(page: ft.Page) -> None:
         # 否则它会算进「注册补丁晚发」的时间里。
         prewarm()
 
-    from cs_music_player.constants import (
-        FONT_FAMILY,
-        FONT_FAMILY_FILE,
+    from cs_music_player.models import FONT_FAMILY, FONT_FAMILY_FILE
+    from cs_music_player.view.theme import (
         build_dark_theme,
         build_light_theme,
         palette,
@@ -154,14 +153,10 @@ async def reveal_window(page: ft.Page) -> None:
 
 
 async def main(page: ft.Page) -> None:
-    from cs_music_player.app import PlayerApp
+    from cs_music_player.bootstrap import run_app
 
     try:
-        page.render(
-            PlayerApp,
-            page,
-            str(STARTUP_PATH) if STARTUP_PATH else None,
-        )
+        await run_app(page, STARTUP_PATH)
     finally:
         # 即使渲染出错也要把窗口显示出来，否则用户只会看到「程序没反应」。
         await reveal_window(page)
