@@ -104,8 +104,12 @@ def PlaylistItem(
                     width=28,
                     text_align=ft.TextAlign.CENTER,
                 ),
-                _track_cover(
-                    track, size=40, is_current=is_selected, is_playing=is_playing
+                # 信息悬浮卡只挂在封面区域：整行悬浮会挡住行本身的点选判读
+                ft.Container(
+                    content=_track_cover(
+                        track, size=40, is_current=is_selected, is_playing=is_playing
+                    ),
+                    tooltip=_track_info_tooltip(track),
                 ),
                 ft.Column(
                     [
@@ -171,7 +175,6 @@ def PlaylistItem(
     return ft.GestureDetector(
         on_tap=_on_select,
         on_double_tap=_on_play,
-        tooltip=_track_info_tooltip(track),
         content=row,
     )
 
