@@ -69,7 +69,7 @@ def build_sleep_dialog(
                 on_click=start_custom,
                 style=ft.ButtonStyle(
                     bgcolor=palette.PRIMARY,
-                    color=ft.Colors.WHITE,
+                    color=palette.ON_PRIMARY,
                     padding=ft.Padding.symmetric(horizontal=14, vertical=8),
                 ),
             ),
@@ -113,7 +113,9 @@ def build_sleep_dialog(
         modal=True,
         title=ft.Text("睡眠定时器", size=16, weight=ft.FontWeight.W_700),
         content=ft.Container(
-            content=ft.Column(body, spacing=10, width=320),
+            # tight：列高按内容算。Column 默认 mainAxisSize.max，会把弹窗
+            # 撑到满高，下半截留一大片空白。
+            content=ft.Column(body, spacing=10, width=320, tight=True),
             padding=ft.Padding.only(top=4),
         ),
         actions=[

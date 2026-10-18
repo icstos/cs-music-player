@@ -45,16 +45,16 @@ def _track_info_tooltip(track: Track) -> ft.Tooltip:
         text_style=ft.TextStyle(
             size=11.5,
             height=1.65,
-            color=ft.Colors.WHITE,
+            color=palette.TOOLTIP_TEXT,
             letter_spacing=0.2,
         ),
         text_align=ft.TextAlign.START,
         padding=ft.Padding.symmetric(horizontal=14, vertical=11),
         decoration=ft.BoxDecoration(
-            bgcolor=ft.Colors.with_opacity(0.97, palette.PRIMARY_DARK),
+            bgcolor=palette.TOOLTIP_BG,
             border_radius=ft.BorderRadius.all(10),
             border=ft.Border.all(
-                1, ft.Colors.with_opacity(0.28, ft.Colors.WHITE)
+                1, ft.Colors.with_opacity(0.16, palette.TOOLTIP_TEXT)
             ),
             shadows=[
                 ft.BoxShadow(
@@ -241,14 +241,38 @@ def Sidebar(
                 ft.Row(
                     [
                         ft.Chip(
-                            label=ft.Text("全部", size=12),
+                            label=ft.Text(
+                                "全部",
+                                size=12,
+                                color=palette.PRIMARY
+                                if not show_favorites
+                                else palette.TEXT_DIM,
+                            ),
                             selected=not show_favorites,
+                            selected_color=palette.PRIMARY_BG,
+                            bgcolor=palette.SURFACE,
+                            border_side=ft.BorderSide(
+                                1,
+                                palette.PRIMARY if not show_favorites else palette.BORDER,
+                            ),
                             on_select=lambda e: on_toggle_favorites(False),
                         ),
                         ft.Chip(
-                            label=ft.Text("收藏", size=12),
+                            label=ft.Text(
+                                "收藏",
+                                size=12,
+                                color=palette.PRIMARY
+                                if show_favorites
+                                else palette.TEXT_DIM,
+                            ),
                             leading=ft.Icon(ft.Icons.FAVORITE, size=16),
                             selected=show_favorites,
+                            selected_color=palette.PRIMARY_BG,
+                            bgcolor=palette.SURFACE,
+                            border_side=ft.BorderSide(
+                                1,
+                                palette.PRIMARY if show_favorites else palette.BORDER,
+                            ),
                             on_select=lambda e: on_toggle_favorites(True),
                         ),
                     ],

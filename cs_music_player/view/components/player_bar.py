@@ -181,7 +181,7 @@ def PlayControls(
     play_icon_size = 26 if compact else 30
     play_icon = ft.Icons.PAUSE_ROUNDED if is_playing else ft.Icons.PLAY_ARROW_ROUNDED
     play_icon_control: ft.Control = ft.Icon(
-        play_icon, color=palette.SURFACE, size=play_icon_size
+        play_icon, color=palette.ON_PRIMARY, size=play_icon_size
     )
     if not is_playing:
         play_icon_control = ft.Container(

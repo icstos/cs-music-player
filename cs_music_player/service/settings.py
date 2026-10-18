@@ -9,18 +9,21 @@ from __future__ import annotations
 import json
 
 from ..infra.ports import (
+    COLOR_THEME_KEY,
     DESKTOP_LYRIC_KEY,
     LYRIC_FONT_KEY,
     THEME_MODE_KEY,
     PreferencesPort,
 )
 from ..models import (
+    DEFAULT_COLOR_THEME,
     DESKTOP_LYRIC_FONT_DEFAULT,
     DESKTOP_LYRIC_FONT_MAX,
     DESKTOP_LYRIC_FONT_MIN,
     LYRIC_FONT_DEFAULT,
     LYRIC_FONT_MAX,
     LYRIC_FONT_MIN,
+    ColorTheme,
     DesktopLyricConfig,
     ThemeMode,
     clamp_lyric_font,
@@ -48,6 +51,18 @@ class SettingsService:
     async def save_theme_mode(self, mode: ThemeMode) -> None:
         """保存主题模式。"""
         await self._prefs.set(THEME_MODE_KEY, str(mode))
+
+    async def color_theme(self) -> ColorTheme:
+        """读取配色主题，未知标识回退为默认配色（例如降级回旧版本后）。"""
+        raw = await self._prefs.get(COLOR_THEME_KEY)
+        try:
+            return ColorTheme(str(raw))
+        except ValueError:
+            return DEFAULT_COLOR_THEME
+
+    async def save_color_theme(self, theme: ColorTheme) -> None:
+        """保存配色主题。"""
+        await self._prefs.set(COLOR_THEME_KEY, str(theme))
 
     # —— 歌词字号 —— #
 

@@ -7,15 +7,18 @@
 
 from __future__ import annotations
 
-from .app import PlayerApp, apply_theme_mode
+from .app import PlayerApp
 from .theme import (
     MODE_ICONS,
     THEME_ICONS,
     THEME_LABELS,
     Palette,
+    apply_palette,
     build_dark_theme,
     build_light_theme,
     palette,
+    sync_page_theme,
+    theme_label,
 )
 
 __all__ = [
@@ -24,8 +27,10 @@ __all__ = [
     "THEME_LABELS",
     "Palette",
     "PlayerApp",
-    "apply_theme_mode",
+    "apply_palette",
     "build_dark_theme",
     "build_light_theme",
     "palette",
+    "sync_page_theme",
+    "theme_label",
 ]

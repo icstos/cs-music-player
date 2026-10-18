@@ -19,10 +19,13 @@ from pathlib import Path
 from typing import Any
 
 from ..models import (
+    DEFAULT_COLOR_THEME,
     DESKTOP_LYRIC_FONT_DEFAULT,
     DESKTOP_LYRIC_FONT_STEP,
     LYRIC_FONT_DEFAULT,
     THEME_MODES,
+    THEME_PREFERRED_MODE,
+    ColorTheme,
     DesktopLyricConfig,
     LyricLine,
     PlayMode,
@@ -95,6 +98,7 @@ class AppViewModel(ObservableModel):
 
         # —— UI 状态（界面完全由这些字段派生）—— #
         self.theme_mode: ThemeMode = ThemeMode.SYSTEM
+        self.color_theme: ColorTheme = DEFAULT_COLOR_THEME
         self.system_brightness: str = "light"
         self.tracks: list[Track] = []
         self.selected: int = -1
@@ -205,6 +209,7 @@ class AppViewModel(ObservableModel):
         self.pinned_folders = await self._folders.pinned_folders()
         self._favorites = await self._library.favorites()
         self.theme_mode = await self._settings.theme_mode()
+        self.color_theme = await self._settings.color_theme()
         self.lyric_font = await self._settings.lyric_font()
         self._apply_desktop_config(await self._desktop.restore())
         self.notify()
@@ -235,8 +240,32 @@ class AppViewModel(ObservableModel):
     def cycle_theme(self) -> None:
         """浅色 → 深色 → 跟随系统 循环切换，并持久化。"""
         index = THEME_MODES.index(self.theme_mode)
-        self.theme_mode = THEME_MODES[(index + 1) % len(THEME_MODES)]
-        self._spawn(self._settings.save_theme_mode(self.theme_mode))
+        self.set_theme_mode(THEME_MODES[(index + 1) % len(THEME_MODES)])
+
+    def set_theme_mode(self, mode: ThemeMode) -> None:
+        """直接指定明暗模式（浅色 / 深色 / 跟随系统）并持久化。"""
+        if mode == self.theme_mode:
+            return
+        self.theme_mode = mode
+        self._spawn(self._settings.save_theme_mode(mode))
+        self.notify()
+
+    def set_color_theme(self, theme: ColorTheme) -> None:
+        """切换配色主题并持久化。
+
+        配色与明暗是正交的两维：配色只换色相，不动明暗。唯一的例外是
+        「极简白 / 暗夜黑」这类名字自带倾向的配色——选中它们时顺带把外观
+        切到对应明暗，否则「点了暗夜黑却还是白底」会让人以为没生效。
+        """
+        if theme == self.color_theme:
+            return
+        self.color_theme = theme
+        self._spawn(self._settings.save_color_theme(theme))
+
+        preferred = THEME_PREFERRED_MODE.get(theme)
+        if preferred is not None and preferred != self.theme_mode:
+            self.theme_mode = preferred
+            self._spawn(self._settings.save_theme_mode(preferred))
         self.notify()
 
     def set_system_brightness(self, brightness: str) -> None:

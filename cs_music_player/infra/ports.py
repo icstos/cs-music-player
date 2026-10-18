@@ -22,6 +22,7 @@ from ..models import (
 )
 
 __all__ = [
+    "COLOR_THEME_KEY",
     "DESKTOP_LYRIC_KEY",
     "FAVORITES_KEY",
     "LYRIC_FONT_KEY",
@@ -47,6 +48,7 @@ FAVORITES_KEY = "favorite_tracks"
 RECENT_FOLDERS_KEY = "recent_folders"
 PINNED_FOLDERS_KEY = "pinned_folders"
 THEME_MODE_KEY = "theme_mode"
+COLOR_THEME_KEY = "color_theme"
 LYRIC_OFFSETS_KEY = "lyric_offsets"
 LYRIC_FONT_KEY = "lyric_font"
 DESKTOP_LYRIC_KEY = "desktop_lyric"

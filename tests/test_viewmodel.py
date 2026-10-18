@@ -8,6 +8,7 @@ from pathlib import Path
 
 from cs_music_player.models import (
     LYRIC_FONT_DEFAULT,
+    ColorTheme,
     LyricLine,
     ThemeMode,
     Track,
@@ -211,6 +212,82 @@ def test_effective_theme_follows_system_brightness() -> None:
 
     vm.theme_mode = ThemeMode.LIGHT
     assert vm.effective_theme == ThemeMode.LIGHT
+
+
+def test_set_theme_mode_persists_and_ignores_repeats() -> None:
+    prefs = FakePreferences({"theme_mode": "dark"})
+    vm, _ = make_view_model(preferences=prefs)
+
+    async def flow() -> None:
+        vm.set_theme_mode(ThemeMode.DARK)  # 与当前一致 → 不写盘
+        await asyncio.sleep(0)
+        vm.set_theme_mode(ThemeMode.LIGHT)
+        await asyncio.sleep(0)
+
+    vm.theme_mode = ThemeMode.DARK
+    prefs.data["theme_mode"] = "dark"
+    asyncio.run(flow())
+
+    assert vm.theme_mode == ThemeMode.LIGHT
+    assert prefs.data["theme_mode"] == "light"
+
+
+def test_color_theme_defaults_to_business_blue() -> None:
+    vm, _ = make_view_model()
+    assert vm.color_theme == ColorTheme.BUSINESS_BLUE
+
+
+def test_set_color_theme_persists_without_touching_mode() -> None:
+    prefs = FakePreferences()
+    vm, _ = make_view_model(preferences=prefs)
+    vm.theme_mode = ThemeMode.DARK
+
+    async def flow() -> None:
+        vm.set_color_theme(ColorTheme.LAVENDER)
+        await asyncio.sleep(0)
+
+    asyncio.run(flow())
+
+    assert vm.color_theme == ColorTheme.LAVENDER
+    assert prefs.data["color_theme"] == "lavender"
+    # 薰衣草紫没有明暗倾向：外观保持不变
+    assert vm.theme_mode == ThemeMode.DARK
+
+
+def test_midnight_switches_appearance_to_dark_and_white_to_light() -> None:
+    prefs = FakePreferences()
+    vm, _ = make_view_model(preferences=prefs)
+    vm.theme_mode = ThemeMode.LIGHT
+
+    async def flow() -> None:
+        vm.set_color_theme(ColorTheme.MIDNIGHT)  # 暗夜黑 → 顺带切深色
+        await asyncio.sleep(0)
+        vm.set_color_theme(ColorTheme.MINIMAL_WHITE)  # 极简白 → 顺带切浅色
+        await asyncio.sleep(0)
+
+    asyncio.run(flow())
+
+    assert vm.color_theme == ColorTheme.MINIMAL_WHITE
+    assert vm.theme_mode == ThemeMode.LIGHT
+    assert prefs.data["theme_mode"] == "light"
+
+
+def test_initialize_restores_persisted_color_theme() -> None:
+    prefs = FakePreferences({"color_theme": "tiffany", "theme_mode": "dark"})
+    vm, _ = make_view_model(preferences=prefs)
+
+    asyncio.run(vm.initialize())
+
+    assert vm.color_theme == ColorTheme.TIFFANY
+    assert vm.theme_mode == ThemeMode.DARK
+
+
+def test_unknown_persisted_color_theme_falls_back() -> None:
+    vm, _ = make_view_model(preferences=FakePreferences({"color_theme": "neon"}))
+
+    asyncio.run(vm.initialize())
+
+    assert vm.color_theme == ColorTheme.BUSINESS_BLUE
 
 
 # ── 歌词 ── #

@@ -12,6 +12,7 @@ from __future__ import annotations
 import flet as ft
 
 from .ports import (
+    COLOR_THEME_KEY,
     DESKTOP_LYRIC_KEY,
     FAVORITES_KEY,
     LYRIC_FONT_KEY,
@@ -22,6 +23,7 @@ from .ports import (
 )
 
 __all__ = [
+    "COLOR_THEME_KEY",
     "DESKTOP_LYRIC_KEY",
     "FAVORITES_KEY",
     "LYRIC_FONT_KEY",

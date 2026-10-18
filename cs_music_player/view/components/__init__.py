@@ -33,6 +33,7 @@ from .player_bar import (
 )
 from .playlist import PlaylistItem, Sidebar
 from .stage import MainStage
+from .theme_picker import ThemeMenuButton, build_theme_menu
 from .toolbar import DesktopLyricButton, SleepTimerButton
 
 __all__ = [
@@ -48,6 +49,8 @@ __all__ = [
     "Sidebar",
     "SleepTimerButton",
     "SpeedControl",
+    "ThemeMenuButton",
+    "build_theme_menu",
     "VolumeControl",
     "build_sleep_dialog",
     "fmt_duration",

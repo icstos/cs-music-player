@@ -1,8 +1,7 @@
-"""共享常量：文件格式、播放模式、速度、歌词版式、桌面歌词尺寸、调色板。
+"""共享常量：文件格式、播放模式、速度、歌词版式、桌面歌词尺寸、本地字体。
 
-主题配色在这里只保留**纯色值**（十六进制字符串），具体的 Flet 主题构造与
-派生透明色在视图层完成（见 :mod:`cs_music_player.view.theme`），因此本模块
-不依赖任何第三方库。
+配色不在这里：调色板由「配色主题 + 明暗」在视图层推导
+（见 :mod:`cs_music_player.view.colors`），本模块不依赖任何第三方库。
 """
 
 from __future__ import annotations
@@ -66,47 +65,6 @@ DESKTOP_LYRIC_FONT_STEP: float = 2.0
 # ── 用户数据 ── #
 #: 最近打开文件夹最多保留几条。
 MAX_RECENT_FOLDERS: int = 8
-
-# ── 调色板（亮 / 暗两套，键名保持一致）── #
-LIGHT_PALETTE: dict[str, str] = {
-    "PRIMARY": "#2563eb",
-    "PRIMARY_LIGHT": "#3b82f6",
-    "PRIMARY_DARK": "#1d4ed8",
-    "ACCENT": "#7c3aed",
-    "ACCENT_LIGHT": "#8b5cf6",
-    "BG": "#f5f7fb",
-    "SURFACE": "#ffffff",
-    "SURFACE_SOFT": "#eef2f7",
-    "PRIMARY_BG": "#eff6ff",
-    "BORDER": "#dbe3ee",
-    "BORDER_FOCUS": "#93c5fd",
-    "TEXT_MAIN": "#0f172a",
-    "TEXT_DIM": "#475569",
-    "TEXT_MUTED": "#94a3b8",
-    "SCAFFOLD": "#f5f7fb",
-    "CANVAS": "#f5f7fb",
-    "CARD": "#ffffff",
-}
-
-DARK_PALETTE: dict[str, str] = {
-    "PRIMARY": "#60a5fa",
-    "PRIMARY_LIGHT": "#93c5fd",
-    "PRIMARY_DARK": "#3b82f6",
-    "ACCENT": "#a78bfa",
-    "ACCENT_LIGHT": "#c4b5fd",
-    "BG": "#0b1220",
-    "SURFACE": "#111827",
-    "SURFACE_SOFT": "#1e293b",
-    "PRIMARY_BG": "#172554",
-    "BORDER": "#243244",
-    "BORDER_FOCUS": "#60a5fa",
-    "TEXT_MAIN": "#f1f5f9",
-    "TEXT_DIM": "#cbd5e1",
-    "TEXT_MUTED": "#94a3b8",
-    "SCAFFOLD": "#0b1220",
-    "CANVAS": "#0b1220",
-    "CARD": "#111827",
-}
 
 # ── 本地字体 ── #
 FONT_FAMILY: str = "Alibaba PuHuiTi"

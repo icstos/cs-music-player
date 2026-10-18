@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from ..models import (
+    ColorTheme,
     DesktopLyricConfig,
     LyricLine,
     PlayMode,
@@ -160,6 +161,14 @@ class SettingsOps(Protocol):
 
     async def save_theme_mode(self, mode: ThemeMode) -> None:
         """保存主题模式。"""
+        ...
+
+    async def color_theme(self) -> ColorTheme:
+        """读取配色主题。"""
+        ...
+
+    async def save_color_theme(self, theme: ColorTheme) -> None:
+        """保存配色主题。"""
         ...
 
     async def lyric_font(self) -> float:

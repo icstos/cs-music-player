@@ -105,3 +105,25 @@ def test_theme_mode_rejects_unknown_values() -> None:
         return await SettingsService(prefs).theme_mode()
 
     assert asyncio.run(flow()) == ThemeMode.SYSTEM
+
+
+def test_color_theme_roundtrip_and_fallback() -> None:
+    from cs_music_player.models import DEFAULT_COLOR_THEME, ColorTheme
+    from cs_music_player.service.settings import SettingsService
+
+    prefs = FakePreferences()
+    service = SettingsService(prefs)
+
+    async def flow() -> tuple[ColorTheme, ColorTheme, ColorTheme]:
+        fresh = await service.color_theme()  # 没存过 → 默认配色
+        await service.save_color_theme(ColorTheme.MINT)
+        saved = await service.color_theme()
+        await prefs.set("color_theme", "neon")  # 未知标识 → 回退默认
+        broken = await service.color_theme()
+        return fresh, saved, broken
+
+    fresh, saved, broken = asyncio.run(flow())
+    assert fresh == DEFAULT_COLOR_THEME
+    assert saved == ColorTheme.MINT
+    assert broken == DEFAULT_COLOR_THEME
+    assert prefs.data["color_theme"] == "neon"

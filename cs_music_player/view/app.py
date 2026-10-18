@@ -24,22 +24,12 @@ from .components import (
     PlayerBar,
     Sidebar,
     SleepTimerButton,
+    ThemeMenuButton,
     build_sleep_dialog,
 )
-from .theme import THEME_ICONS, THEME_LABELS, palette
+from .theme import apply_palette, palette, sync_page_theme
 
 __all__ = ["PlayerApp"]
-
-
-def apply_theme_mode(page: ft.Page, mode: str) -> None:
-    """把主题模式应用到全局调色板与 Flet Material 主题。
-
-    必须在**构造控件之前**调用——组件在渲染时读 ``palette.*``，先换表后
-    渲染，同一次渲染里所有组件拿到的才是同一套颜色。
-    """
-    palette.set_mode(mode)
-    page.theme_mode = ft.ThemeMode.DARK if mode == "dark" else ft.ThemeMode.LIGHT
-    page.bgcolor = palette.BG
 
 
 @ft.component
@@ -65,8 +55,9 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
     ft.use_effect(lambda: _remember_page_hooks(), dependencies=[])
 
     # —— 主题：先换调色板，再渲染 —— #
+    color_theme = vm.color_theme
     effective_theme = str(vm.effective_theme)
-    apply_theme_mode(page, effective_theme)
+    apply_palette(color_theme, effective_theme)
 
     def push_page_theme() -> None:
         """主题是页面级属性：渲染完把补丁推给客户端。
@@ -74,10 +65,10 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
         组件模式下属性赋值不会自动下发，必须显式 ``page.update()``；
         调色板已经在渲染前切好，所以这里只补页面自身的属性。
         """
-        apply_theme_mode(page, str(vm.effective_theme))
+        sync_page_theme(page, color_theme, effective_theme)
         page.update()
 
-    ft.use_effect(push_page_theme, [effective_theme])
+    ft.use_effect(push_page_theme, [color_theme, effective_theme])
 
     # —— 提示 —— #
     toast_serial = vm.toast.serial if vm.toast is not None else 0
@@ -105,12 +96,18 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
         page.run_task(handler, *args)
 
     def _remember_page_hooks() -> None:
-        """页面级回调：平台亮度变化时通知视图模型。"""
+        """页面级回调：平台亮度变化、全局快捷键。"""
 
         def on_brightness(e: ft.ControlEvent) -> None:
             vm.set_system_brightness(str(page.platform_brightness))
 
         def on_keyboard(e: ft.KeyboardEvent) -> None:
+            # Esc 收起当前弹窗（桌面软件的常规预期；配色菜单由原生
+            # PopupMenu 自己处理 Esc）
+            if e.key == "Escape":
+                if sleep_dialog.current is not None:
+                    close_sleep_dialog()
+                return
             if e.key != " " or e.ctrl or e.alt or e.meta:
                 return
             if search_focused.current:
@@ -251,7 +248,6 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
         )
 
     menu_width = 300
-    theme = vm.theme_mode
     track = vm.display_track
 
     toolbar = ft.Container(
@@ -261,7 +257,7 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
                     [
                         ft.Container(
                             content=ft.Icon(
-                                ft.Icons.LIBRARY_MUSIC, color=palette.SURFACE, size=20
+                                ft.Icons.LIBRARY_MUSIC, color=palette.ON_PRIMARY, size=20
                             ),
                             width=36,
                             height=36,
@@ -296,16 +292,11 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
                     vm.reset_desktop_font,
                     vm.close_desktop_lyric,
                 ),
-                ft.IconButton(
-                    icon=THEME_ICONS[theme],
-                    icon_color=palette.TEXT_DIM,
-                    icon_size=20,
-                    tooltip=f"主题：{THEME_LABELS[theme]}（点击切换）",
-                    on_click=lambda e: vm.cycle_theme(),
-                    style=ft.ButtonStyle(
-                        padding=ft.Padding.all(8),
-                        overlay_color=ft.Colors.with_opacity(0.08, palette.PRIMARY),
-                    ),
+                ThemeMenuButton(
+                    color_theme,
+                    vm.theme_mode,
+                    vm.set_color_theme,
+                    vm.set_theme_mode,
                 ),
                 ft.PopupMenuButton(
                     icon=ft.Icons.HISTORY,
@@ -328,7 +319,7 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
                             ft.ControlState.DEFAULT: palette.PRIMARY,
                             ft.ControlState.HOVERED: palette.PRIMARY_DARK,
                         },
-                        color=ft.Colors.WHITE,
+                        color=palette.ON_PRIMARY,
                         padding=ft.Padding.symmetric(horizontal=16, vertical=10),
                     ),
                 ),
