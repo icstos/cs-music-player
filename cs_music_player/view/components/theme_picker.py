@@ -21,7 +21,33 @@ from __future__ import annotations
 from collections.abc import Callable
 from functools import lru_cache
 
-from ui import Container, Icons, Row, SPACE, Text, ft, selected_layer
+from ui import (
+    Alignment,
+    Border,
+    BoxConstraints,
+    ButtonStyle,
+    Colors,
+    Column,
+    Container,
+    Control,
+    ControlEvent,
+    CrossAxisAlignment,
+    Divider,
+    FontWeight,
+    Icon,
+    IconData,
+    Icons,
+    MainAxisAlignment,
+    Padding,
+    PopupMenuButton,
+    PopupMenuItem,
+    PopupMenuPosition,
+    Row,
+    SPACE,
+    Text,
+    component,
+    selected_layer,
+)
 from ui.core.palette import build_scheme
 
 from ...models import (
@@ -53,7 +79,7 @@ def _swatch_colors(theme: ColorTheme) -> tuple[str, str]:
 # ── 面板内的小控件 ── #
 
 
-def _swatch(theme: ColorTheme) -> ft.Control:
+def _swatch(theme: ColorTheme) -> Control:
     """配色样本：外圈主色、内芯是该配色自己的底色。
 
     内芯取「该配色自己的底色」，而不是当前底色——这样在深色界面里看极简白，
@@ -65,8 +91,8 @@ def _swatch(theme: ColorTheme) -> ft.Control:
         width=20,
         height=20,
         border_radius=10,
-        alignment=ft.Alignment.CENTER,
-        border=ft.Border.all(1, t.LINE),
+        alignment=Alignment.CENTER,
+        border=Border.all(1, t.LINE),
         content=Container(
             width=16,
             height=16,
@@ -74,7 +100,7 @@ def _swatch(theme: ColorTheme) -> ft.Control:
             bgcolor=surface,
             # 外圈取「该配色偏好明暗下的主色」：暗夜黑因此是浅圈深芯，
             # 与极简白（深圈白芯）在样本尺度上也不会看混
-            border=ft.Border.all(4, primary),
+            border=Border.all(4, primary),
         ),
     )
 
@@ -82,8 +108,8 @@ def _swatch(theme: ColorTheme) -> ft.Control:
 def _chip(
     theme: ColorTheme,
     is_active: bool,
-    on_click: Callable[[ft.ControlEvent], None],
-) -> ft.Control:
+    on_click: Callable[[ControlEvent], None],
+) -> Control:
     return Container(
         content=Row(
             controls=[
@@ -91,30 +117,30 @@ def _chip(
                 Text(
                     theme_label(theme),
                     size=12,
-                    weight=ft.FontWeight.W_600
+                    weight=FontWeight.W_600
                     if is_active
-                    else ft.FontWeight.NORMAL,
+                    else FontWeight.NORMAL,
                     color=t.TEXT if is_active else t.TEXT_SOFT,
                     max_lines=1,
                 ),
                 Container(expand=True),
-                ft.Icon(
+                Icon(
                     Icons.CHECK_ROUNDED,
                     size=15,
-                    color=ft.Colors.PRIMARY,
+                    color=Colors.PRIMARY,
                     visible=is_active,
                 ),
             ],
             spacing=SPACE["2"],
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            vertical_alignment=CrossAxisAlignment.CENTER,
         ),
         width=_CHIP_WIDTH,
         height=_CHIP_HEIGHT,
-        padding=ft.Padding.symmetric(horizontal=SPACE["2"]),
+        padding=Padding.symmetric(horizontal=SPACE["2"]),
         border_radius=10,
         ink=True,
         bgcolor=selected_layer("normal") if is_active else None,
-        border=ft.Border.all(1, ft.Colors.PRIMARY if is_active else t.LINE),
+        border=Border.all(1, Colors.PRIMARY if is_active else t.LINE),
         on_click=on_click,
     )
 
@@ -122,48 +148,48 @@ def _chip(
 def _mode_pill(
     mode: ThemeMode,
     is_active: bool,
-    on_click: Callable[[ft.ControlEvent], None],
-) -> ft.Control:
+    on_click: Callable[[ControlEvent], None],
+) -> Control:
     return Container(
         content=Row(
             controls=[
-                ft.Icon(
+                Icon(
                     THEME_ICONS[mode],
                     size=14,
-                    color=ft.Colors.ON_PRIMARY if is_active else t.TEXT_SOFT,
+                    color=Colors.ON_PRIMARY if is_active else t.TEXT_SOFT,
                 ),
                 Text(
                     THEME_LABELS[mode],
                     size=11,
-                    weight=ft.FontWeight.W_600
+                    weight=FontWeight.W_600
                     if is_active
-                    else ft.FontWeight.NORMAL,
-                    color=ft.Colors.ON_PRIMARY if is_active else t.TEXT_SOFT,
+                    else FontWeight.NORMAL,
+                    color=Colors.ON_PRIMARY if is_active else t.TEXT_SOFT,
                 ),
             ],
             spacing=5,
-            alignment=ft.MainAxisAlignment.CENTER,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            alignment=MainAxisAlignment.CENTER,
+            vertical_alignment=CrossAxisAlignment.CENTER,
         ),
         expand=True,
         height=32,
         border_radius=8,
         ink=True,
-        bgcolor=ft.Colors.PRIMARY if is_active else t.PANEL_HIGH,
+        bgcolor=Colors.PRIMARY if is_active else t.PANEL_HIGH,
         on_click=on_click,
     )
 
 
-def _section_hint(icon: ft.IconData, text: str, hint: str) -> ft.Control:
+def _section_hint(icon: IconData, text: str, hint: str) -> Control:
     return Row(
         controls=[
-            ft.Icon(icon, size=13, color=t.TEXT_SOFT),
-            Text(text, size=11, weight=ft.FontWeight.W_600, color=t.TEXT),
+            Icon(icon, size=13, color=t.TEXT_SOFT),
+            Text(text, size=11, weight=FontWeight.W_600, color=t.TEXT),
             Container(expand=True),
             Text(hint, size=10, color=t.TEXT_SOFT),
         ],
         spacing=6,
-        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        vertical_alignment=CrossAxisAlignment.CENTER,
     )
 
 
@@ -175,19 +201,19 @@ def build_theme_menu(
     mode: ThemeMode,
     on_pick_color: Callable[[ColorTheme], None],
     on_pick_mode: Callable[[ThemeMode], None],
-) -> ft.PopupMenuItem:
+) -> PopupMenuItem:
     """整套配色 / 外观面板，作为悬浮菜单里唯一的一项。
 
     ``on_click`` 故意留空：Flet 只在条目自身有 on_click 时才在点击后关闭菜单，
     这样点色点可以连着试几套，菜单不会自己收起来。
     """
-    return ft.PopupMenuItem(
-        padding=ft.Padding.all(SPACE["3"]),
+    return PopupMenuItem(
+        padding=Padding.all(SPACE["3"]),
         height=_MENU_HEIGHT,
-        content=ft.Column(
+        content=Column(
             controls=[
                 _section_hint(Icons.COLOR_LENS_OUTLINED, "配色主题", "点击即生效"),
-                ft.Row(
+                Row(
                     controls=[
                         _chip(theme, theme == color, lambda e, c=theme: on_pick_color(c))
                         for theme in ColorTheme
@@ -196,9 +222,9 @@ def build_theme_menu(
                     spacing=SPACE["2"],
                     run_spacing=SPACE["2"],
                 ),
-                ft.Divider(height=1, color=t.LINE),
+                Divider(height=1, color=t.LINE),
                 _section_hint(Icons.BRIGHTNESS_6_OUTLINED, "外观", "与配色无关"),
-                ft.Row(
+                Row(
                     controls=[
                         _mode_pill(each, each == mode, lambda e, m=each: on_pick_mode(m))
                         for each in (
@@ -219,26 +245,26 @@ def build_theme_menu(
 # ── 工具栏入口 ── #
 
 
-@ft.component
+@component
 def ThemeMenuButton(
     color: ColorTheme,
     mode: ThemeMode,
     on_pick_color: Callable[[ColorTheme], None],
     on_pick_mode: Callable[[ThemeMode], None],
-) -> ft.Control:
+) -> Control:
     """工具栏上的调色板入口；面板由原生菜单承载。
 
     图标颜色跟着当前品牌色走 —— 它本身就是「主色现在是什么」的指示器。
     """
     label = theme_label(color)
-    return ft.PopupMenuButton(
+    return PopupMenuButton(
         icon=Icons.PALETTE_OUTLINED,
-        icon_color=ft.Colors.PRIMARY,
+        icon_color=Colors.PRIMARY,
         icon_size=22,
         tooltip=f"配色：{label}（点击更换）",
-        style=ft.ButtonStyle(padding=ft.Padding.all(8)),
-        menu_position=ft.PopupMenuPosition.UNDER,
-        size_constraints=ft.BoxConstraints(
+        style=ButtonStyle(padding=Padding.all(8)),
+        menu_position=PopupMenuPosition.UNDER,
+        size_constraints=BoxConstraints(
             min_width=PANEL_WIDTH + 24, max_width=PANEL_WIDTH + 24
         ),
         items=[build_theme_menu(color, mode, on_pick_color, on_pick_mode)],

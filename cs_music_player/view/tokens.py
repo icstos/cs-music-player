@@ -32,7 +32,7 @@
 
 from __future__ import annotations
 
-from ui import ft
+from ui import Colors
 
 __all__ = [
     "ACCENT",
@@ -51,31 +51,31 @@ __all__ = [
 # ── 层次 ── #
 
 #: 内容区底色（歌词、封面）。整个界面最「平」的一层。
-CANVAS: str = ft.Colors.SURFACE
+CANVAS: str = Colors.SURFACE
 #: 固定的功能面板：顶栏、侧栏、底部播放栏。
-PANEL: str = ft.Colors.SURFACE_CONTAINER_LOW
+PANEL: str = Colors.SURFACE_CONTAINER_LOW
 #: 面板上的次级块：搜索框、筛选胶囊、歌词工具条。
-PANEL_HIGH: str = ft.Colors.SURFACE_CONTAINER_HIGH
+PANEL_HIGH: str = Colors.SURFACE_CONTAINER_HIGH
 
 # ── 描边与文字 ── #
 
 #: 1px 分隔线 / 描边。比 ``OUTLINE`` 淡一档，用来「分开」而不是「框住」。
-LINE: str = ft.Colors.OUTLINE_VARIANT
+LINE: str = Colors.OUTLINE_VARIANT
 #: 正文与标题。
-TEXT: str = ft.Colors.ON_SURFACE
+TEXT: str = Colors.ON_SURFACE
 #: 次要信息：歌手、时长、计数、说明。
-TEXT_SOFT: str = ft.Colors.ON_SURFACE_VARIANT
+TEXT_SOFT: str = Colors.ON_SURFACE_VARIANT
 
 # ── 强调与状态 ── #
 
 #: 点缀色：与主色同族、退后一级，用在睡眠定时器、桌面歌词、收藏这些「次强调」。
-ACCENT: str = ft.Colors.TERTIARY
+ACCENT: str = Colors.TERTIARY
 #: 选中行底色 / 文字。
-SELECTED_BG: str = ft.Colors.PRIMARY_CONTAINER
-SELECTED_TEXT: str = ft.Colors.ON_PRIMARY_CONTAINER
+SELECTED_BG: str = Colors.PRIMARY_CONTAINER
+SELECTED_TEXT: str = Colors.ON_PRIMARY_CONTAINER
 
 # ── 滑轨 ── #
 
 #: 进度 / 音量滑轨：走过的一段是主色，没走过的是描边色。
-TRACK_ACTIVE: str = ft.Colors.PRIMARY
-TRACK: str = ft.Colors.OUTLINE_VARIANT
+TRACK_ACTIVE: str = Colors.PRIMARY
+TRACK: str = Colors.OUTLINE_VARIANT

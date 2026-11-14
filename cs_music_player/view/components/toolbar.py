@@ -4,7 +4,28 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ui import Container, Icons, Row, SPACE, Text, ft, state_layer
+from ui import (
+    BoxConstraints,
+    ButtonStyle,
+    Colors,
+    Container,
+    Control,
+    CrossAxisAlignment,
+    Divider,
+    Icon,
+    IconButton,
+    IconData,
+    Icons,
+    Padding,
+    PopupMenuButton,
+    PopupMenuItem,
+    PopupMenuPosition,
+    Row,
+    SPACE,
+    Text,
+    component,
+    state_layer,
+)
 
 from .. import tokens as t
 from .format import fmt_duration
@@ -15,7 +36,7 @@ __all__ = ["DesktopLyricButton", "SleepTimerButton"]
 # ── 桌面歌词入口 ── #
 
 
-@ft.component
+@component
 def DesktopLyricButton(
     enabled: bool,
     locked: bool,
@@ -25,7 +46,7 @@ def DesktopLyricButton(
     on_font_step: Callable[[float], None],
     on_reset_font: Callable[[], None],
     on_close: Callable[[], None],
-) -> ft.Control:
+) -> Control:
     """工具栏上的桌面歌词入口。
 
     开关、锁定、字号都收在一个菜单里：桌面歌词的浮窗本身就是「无边框、可穿透」
@@ -35,17 +56,17 @@ def DesktopLyricButton(
     active = enabled
 
     def item(
-        icon: ft.IconData,
+        icon: IconData,
         label: str,
         on_click: Callable[[], None],
         *,
         accent: bool = False,
         hint: str = "",
-    ) -> ft.PopupMenuItem:
-        return ft.PopupMenuItem(
+    ) -> PopupMenuItem:
+        return PopupMenuItem(
             content=Row(
                 controls=[
-                    ft.Icon(
+                    Icon(
                         icon,
                         size=16,
                         color=t.ACCENT if accent else t.TEXT_SOFT,
@@ -57,15 +78,15 @@ def DesktopLyricButton(
                     else Container(),
                 ],
                 spacing=SPACE["2"],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                vertical_alignment=CrossAxisAlignment.CENTER,
             ),
             on_click=lambda e: on_click(),
         )
 
-    def divider() -> ft.PopupMenuItem:
-        return ft.PopupMenuItem(content=ft.Divider(height=1, color=t.LINE), height=1)
+    def divider() -> PopupMenuItem:
+        return PopupMenuItem(content=Divider(height=1, color=t.LINE), height=1)
 
-    items: list[ft.PopupMenuItem] = [
+    items: list[PopupMenuItem] = [
         item(
             Icons.CLOSE if enabled else Icons.SUBTITLES,
             "隐藏桌面歌词" if enabled else "显示桌面歌词",
@@ -104,23 +125,23 @@ def DesktopLyricButton(
     if enabled:
         tooltip = "桌面歌词（已开启" + ("，已锁定" if locked else "") + "）"
 
-    return ft.PopupMenuButton(
+    return PopupMenuButton(
         icon=Icons.SUBTITLES if not active else Icons.SUBTITLES_ROUNDED,
-        icon_color=ft.Colors.PRIMARY if active else t.TEXT_SOFT,
+        icon_color=Colors.PRIMARY if active else t.TEXT_SOFT,
         icon_size=22,
         tooltip=tooltip,
-        style=ft.ButtonStyle(padding=ft.Padding.all(8)),
-        menu_position=ft.PopupMenuPosition.UNDER,
-        size_constraints=ft.BoxConstraints(min_width=252, max_width=252),
+        style=ButtonStyle(padding=Padding.all(8)),
+        menu_position=PopupMenuPosition.UNDER,
+        size_constraints=BoxConstraints(min_width=252, max_width=252),
         items=items,
     )
 
 
-@ft.component
+@component
 def SleepTimerButton(
     remaining: float,
     on_click: Callable[[], None],
-) -> ft.Control:
+) -> Control:
     """睡眠定时器入口：仅图标，激活时强调色提示。
 
     倒计时进行中把剩余时间写进 tooltip——不占版面，又把「还有多久」这个
@@ -130,14 +151,14 @@ def SleepTimerButton(
     tooltip = (
         f"睡眠定时器（剩余 {fmt_duration(remaining)}）" if active else "睡眠定时器"
     )
-    return ft.IconButton(
+    return IconButton(
         icon=Icons.BEDTIME if active else Icons.BEDTIME_OUTLINED,
         icon_color=t.ACCENT if active else t.TEXT_SOFT,
         icon_size=20,
         tooltip=tooltip,
         on_click=lambda e: on_click(),
-        style=ft.ButtonStyle(
-            padding=ft.Padding.all(8),
+        style=ButtonStyle(
+            padding=Padding.all(8),
             overlay_color=state_layer("hover"),
         ),
     )

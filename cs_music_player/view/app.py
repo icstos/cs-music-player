@@ -7,11 +7,11 @@
 
 状态变化由视图模型广播，本组件订阅后重渲染，因此「UI = f(状态)」。
 
-界面只依赖 ``ui``（cs-ui 组件库）：布局用它的 ``Container`` / ``Row`` /
-``Column`` / ``ListView``，控件用 ``Button`` / ``SegmentedButton``，颜色一律走
-M3 角色（见 :mod:`cs_music_player.view.tokens`）。原生 ``ft.*`` 只在这些场景出现：
-cs-ui 没有等价物（``Icon`` / ``IconButton`` / ``Slider`` / ``PopupMenuButton`` /
-``GestureDetector``），或者需要用到框架层的浮层与动画。
+界面**只依赖 ``ui``（cs-ui 组件库）**：布局用 ``Container`` / ``Row`` / ``Column`` /
+``ListView``，控件用 ``Button`` / ``IconButton`` / ``PopupMenuButton``，连颜色与对齐这类
+值类型也从 ``ui`` 顶层取（``Colors`` / ``Alignment`` / ``Padding``…）。因此本包里看不到
+任何 flet 前缀——唯一的例外是 :mod:`cs_music_player.view.components.primitives`
+（cs-ui 的同名控件是表单组件，与这里的「裸滑轨」同名不同物）。
 """
 
 from __future__ import annotations
@@ -21,15 +21,38 @@ from pathlib import Path
 from typing import Any
 
 from ui import (
+    Alignment,
+    Border,
+    BorderSide,
+    BoxConstraints,
     Button,
+    ButtonStyle,
+    Colors,
+    Column,
     Container,
+    Control,
+    CrossAxisAlignment,
+    Divider,
+    FontWeight,
+    Icon,
+    IconButton,
     Icons,
+    KeyboardEvent,
     Message,
+    Padding,
+    Page,
+    PopupMenuButton,
+    PopupMenuItem,
+    PopupMenuPosition,
     Row,
     SPACE,
     StyleType,
     Text,
-    ft,
+    TextOverflow,
+    component,
+    use_effect,
+    use_ref,
+    use_state,
 )
 
 from ..models import ThemeMode
@@ -52,12 +75,12 @@ __all__ = ["PlayerApp", "build_history_menu"]
 TOOLBAR_PAD_Y = SPACE["3"]
 
 
-@ft.component
+@component
 def PlayerApp(
-    page: ft.Page,
+    page: Page,
     vm: AppViewModel,
     on_appearance: Callable[[bool], None] | None = None,
-) -> ft.Control:
+) -> Control:
     """应用主界面。
 
     Args:
@@ -68,11 +91,11 @@ def PlayerApp(
             通知」，不碰任何平台细节。
     """
     # 视图模型是不可变数据源；用一个自增版本号驱动整棵树重渲染。
-    revision, set_revision = ft.use_state(0)
-    invalidate = ft.use_ref(lambda: None)
-    dragging = ft.use_ref(False)
-    search_focused = ft.use_ref(False)
-    sleep_dialog = ft.use_ref(None)
+    revision, set_revision = use_state(0)
+    invalidate = use_ref(lambda: None)
+    dragging = use_ref(False)
+    search_focused = use_ref(False)
+    sleep_dialog = use_ref(None)
 
     def bump_revision() -> None:
         set_revision(lambda value: value + 1)
@@ -83,7 +106,7 @@ def PlayerApp(
         """视图模型变了：重渲染整棵树。"""
         invalidate.current()
 
-    ft.use_effect(lambda: vm.subscribe(on_state_changed), [vm])
+    use_effect(lambda: vm.subscribe(on_state_changed), [vm])
 
     # —— 主题：配色 / 明暗变了才重下发页面级主题 —— #
     color_theme = vm.color_theme
@@ -101,7 +124,7 @@ def PlayerApp(
 
     # 依赖取「解析后的明暗」而不是「用户选的模式」：跟随系统时，系统亮度变化
     # 也要让原生标题栏跟着换色。
-    ft.use_effect(push_theme, [color_theme, str(vm.effective_theme)])
+    use_effect(push_theme, [color_theme, str(vm.effective_theme)])
 
     # —— 提示 —— #
     toast_serial = vm.toast.serial if vm.toast is not None else 0
@@ -111,7 +134,7 @@ def PlayerApp(
             return
         Message.info(vm.toast.message).show(page)
 
-    ft.use_effect(show_toast, [toast_serial])
+    use_effect(show_toast, [toast_serial])
 
     # —— 交互适配 —— #
 
@@ -128,7 +151,7 @@ def PlayerApp(
         处理 Esc）；空格播放 / 暂停——但输入框有焦点时不抢空格。
         """
 
-        def on_keyboard(e: ft.KeyboardEvent) -> None:
+        def on_keyboard(e: KeyboardEvent) -> None:
             if e.key == "Escape":
                 if sleep_dialog.current is not None:
                     close_sleep_dialog()
@@ -141,7 +164,7 @@ def PlayerApp(
 
         page.on_keyboard_event = on_keyboard
 
-    ft.use_effect(_remember_page_hooks, dependencies=[])
+    use_effect(_remember_page_hooks, dependencies=[])
 
     # —— 睡眠定时器弹窗（视图自持的瞬时 UI 状态）—— #
 
@@ -188,26 +211,26 @@ def PlayerApp(
                 Row(
                     controls=[
                         Container(
-                            content=ft.Icon(
+                            content=Icon(
                                 Icons.LIBRARY_MUSIC,
-                                color=ft.Colors.ON_PRIMARY,
+                                color=Colors.ON_PRIMARY,
                                 size=20,
                             ),
                             width=36,
                             height=36,
-                            alignment=ft.Alignment.CENTER,
-                            bgcolor=ft.Colors.PRIMARY,
+                            alignment=Alignment.CENTER,
+                            bgcolor=Colors.PRIMARY,
                             border_radius=10,
                         ),
                         Text(
                             "CS 音乐播放器",
                             size=16,
-                            weight=ft.FontWeight.W_700,
+                            weight=FontWeight.W_700,
                             color=t.TEXT,
                         ),
                     ],
                     spacing=SPACE["3"],
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    vertical_alignment=CrossAxisAlignment.CENTER,
                 ),
                 Container(expand=True),
                 SleepTimerButton(vm.sleep_remaining, open_sleep_dialog),
@@ -242,11 +265,11 @@ def PlayerApp(
                 ),
             ],
             spacing=SPACE["2"],
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            vertical_alignment=CrossAxisAlignment.CENTER,
         ),
         bgcolor=t.PANEL,
-        border=ft.Border(bottom=ft.BorderSide(1, t.LINE)),
-        padding=ft.Padding.symmetric(
+        border=Border(bottom=BorderSide(1, t.LINE)),
+        padding=Padding.symmetric(
             horizontal=SPACE["4"], vertical=TOOLBAR_PAD_Y
         ),
     )
@@ -254,7 +277,7 @@ def PlayerApp(
     return Container(
         expand=True,
         bgcolor=t.CANVAS,
-        content=ft.Column(
+        content=Column(
             controls=[
                 toolbar,
                 Row(
@@ -326,7 +349,7 @@ def build_history_menu(
     on_open: Callable[[str], None],
     on_toggle_pin: Callable[[str], None],
     on_clear: Callable[[], None],
-) -> ft.PopupMenuButton:
+) -> PopupMenuButton:
     """历史文件夹下拉菜单：固定组在前、最近组在后，每条都能就地固定 / 取消。
 
     两级分组解决一个具体问题：常用的三个文件夹会随使用不断往下沉，固定之后就
@@ -337,7 +360,7 @@ def build_history_menu(
     ]
     recent_list = [folder for folder in recent if folder not in pinned]
 
-    items: list[ft.PopupMenuItem] = []
+    items: list[PopupMenuItem] = []
     if pinned_list:
         items.append(_menu_header("固定文件夹"))
         items.extend(
@@ -353,7 +376,7 @@ def build_history_menu(
         )
     if not pinned_list and not recent_list:
         items.append(
-            ft.PopupMenuItem(
+            PopupMenuItem(
                 content=Text("暂无历史文件夹", size=12, color=t.TEXT_SOFT),
                 on_click=lambda e: None,
             )
@@ -361,10 +384,10 @@ def build_history_menu(
     elif recent_list:
         items.append(_menu_divider())
         items.append(
-            ft.PopupMenuItem(
+            PopupMenuItem(
                 content=Row(
                     controls=[
-                        ft.Icon(Icons.DELETE_OUTLINE, size=15, color=t.TEXT_SOFT),
+                        Icon(Icons.DELETE_OUTLINE, size=15, color=t.TEXT_SOFT),
                         Text("清空历史", size=12, color=t.TEXT_SOFT),
                     ],
                     spacing=SPACE["2"],
@@ -373,35 +396,35 @@ def build_history_menu(
             )
         )
 
-    return ft.PopupMenuButton(
+    return PopupMenuButton(
         icon=Icons.HISTORY,
         icon_color=t.TEXT_SOFT,
         icon_size=22,
         tooltip="历史文件夹",
-        style=ft.ButtonStyle(padding=ft.Padding.all(8)),
-        menu_position=ft.PopupMenuPosition.UNDER,
-        size_constraints=ft.BoxConstraints(
+        style=ButtonStyle(padding=Padding.all(8)),
+        menu_position=PopupMenuPosition.UNDER,
+        size_constraints=BoxConstraints(
             min_width=HISTORY_MENU_WIDTH, max_width=HISTORY_MENU_WIDTH
         ),
         items=items,
     )
 
 
-def _menu_header(text: str) -> ft.PopupMenuItem:
+def _menu_header(text: str) -> PopupMenuItem:
     """分组标题：不可点，只用来「分段」。"""
-    return ft.PopupMenuItem(
+    return PopupMenuItem(
         content=Text(
             text,
             size=11,
-            weight=ft.FontWeight.W_600,
+            weight=FontWeight.W_600,
             color=t.TEXT_SOFT,
         ),
         height=32,
     )
 
 
-def _menu_divider() -> ft.PopupMenuItem:
-    return ft.PopupMenuItem(content=ft.Divider(height=1, color=t.LINE), height=1)
+def _menu_divider() -> PopupMenuItem:
+    return PopupMenuItem(content=Divider(height=1, color=t.LINE), height=1)
 
 
 def _folder_item(
@@ -409,15 +432,15 @@ def _folder_item(
     pinned: bool,
     on_open: Callable[[str], None],
     on_toggle_pin: Callable[[str], None],
-) -> ft.PopupMenuItem:
+) -> PopupMenuItem:
     """一条历史记录：左边图标表示「已固定 / 普通」，右边图钉就地固定。"""
     path = Path(folder)
     name = path.name or folder
-    return ft.PopupMenuItem(
+    return PopupMenuItem(
         tooltip=folder,
         content=Row(
             controls=[
-                ft.Icon(
+                Icon(
                     Icons.PUSH_PIN if pinned else Icons.FOLDER_OPEN,
                     size=15,
                     color=t.ACCENT if pinned else t.TEXT_SOFT,
@@ -427,20 +450,20 @@ def _folder_item(
                     size=12,
                     color=t.TEXT,
                     max_lines=1,
-                    overflow=ft.TextOverflow.ELLIPSIS,
+                    overflow=TextOverflow.ELLIPSIS,
                     expand=True,
                 ),
-                ft.IconButton(
+                IconButton(
                     icon=Icons.PUSH_PIN_OUTLINED if not pinned else Icons.PUSH_PIN,
                     icon_size=14,
                     icon_color=t.ACCENT if pinned else t.TEXT_SOFT,
                     tooltip="取消固定" if pinned else "固定文件夹",
                     on_click=lambda e, f=folder: on_toggle_pin(f),
-                    padding=ft.Padding.all(2),
+                    padding=Padding.all(2),
                 ),
             ],
             spacing=SPACE["2"],
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            vertical_alignment=CrossAxisAlignment.CENTER,
         ),
         on_click=lambda e, f=folder: on_open(f),
     )

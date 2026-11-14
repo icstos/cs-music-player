@@ -4,7 +4,27 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ui import Container, Icons, Row, SPACE, Text, ft
+from ui import (
+    Animation,
+    AnimationCurve,
+    BoxShadow,
+    Colors,
+    Column,
+    Container,
+    Control,
+    CrossAxisAlignment,
+    FontWeight,
+    Icon,
+    Icons,
+    Offset,
+    Padding,
+    Row,
+    SPACE,
+    Text,
+    TextAlign,
+    TextOverflow,
+    component,
+)
 
 from ...models import LYRIC_FONT_DEFAULT, LyricLine, Track
 from .. import tokens as t
@@ -19,7 +39,7 @@ __all__ = ["MainStage"]
 COVER_SIZE = 220
 
 
-@ft.component
+@component
 def MainStage(
     track: Track | None,
     is_playing: bool,
@@ -30,7 +50,7 @@ def MainStage(
     lyric_font: float = LYRIC_FONT_DEFAULT,
     on_adjust_lyric: Callable[[float], None] | None = None,
     on_adjust_font: Callable[[float], None] | None = None,
-) -> ft.Control:
+) -> Control:
     """上半屏是「这首歌是什么」，下半屏是「唱到哪一句」。
 
     歌词区独占剩余空间，并且**宽度限死**（``max_width``）：一行歌词横跨 1400px
@@ -42,7 +62,7 @@ def MainStage(
     )
     meta = _meta_line(track)
 
-    heading = ft.Column(
+    heading = Column(
         controls=[
             Container(
                 content=track_cover(
@@ -51,41 +71,41 @@ def MainStage(
                     is_playing=is_playing,
                     letter_fallback=True,
                 ),
-                shadow=ft.BoxShadow(
+                shadow=BoxShadow(
                     spread_radius=0,
                     blur_radius=32,
-                    color=ft.Colors.with_opacity(0.18, ft.Colors.SHADOW),
-                    offset=ft.Offset(0, 12),
+                    color=Colors.with_opacity(0.18, Colors.SHADOW),
+                    offset=Offset(0, 12),
                 ),
-                animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+                animate=Animation(300, AnimationCurve.EASE_OUT),
             ),
             Container(height=SPACE["2"]),
             Text(
                 title,
                 size=22,
-                weight=ft.FontWeight.W_700,
+                weight=FontWeight.W_700,
                 color=t.TEXT,
                 max_lines=1,
-                overflow=ft.TextOverflow.ELLIPSIS,
-                text_align=ft.TextAlign.CENTER,
+                overflow=TextOverflow.ELLIPSIS,
+                text_align=TextAlign.CENTER,
             ),
             Text(
                 subtitle,
                 size=13,
                 color=t.TEXT_SOFT,
                 max_lines=1,
-                overflow=ft.TextOverflow.ELLIPSIS,
-                text_align=ft.TextAlign.CENTER,
+                overflow=TextOverflow.ELLIPSIS,
+                text_align=TextAlign.CENTER,
             ),
             *([Text(meta, size=11, color=t.TEXT_SOFT)] if meta else []),
             _PlayState(is_playing=is_playing, has_track=track is not None),
         ],
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        horizontal_alignment=CrossAxisAlignment.CENTER,
         spacing=SPACE["1"],
         tight=True,
     )
 
-    lyrics_section = ft.Column(
+    lyrics_section = Column(
         controls=[
             (
                 LyricSettingsEntry(
@@ -114,21 +134,21 @@ def MainStage(
         ],
         spacing=0,
         expand=True,
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        horizontal_alignment=CrossAxisAlignment.CENTER,
     )
 
     return Container(
-        content=ft.Column(
+        content=Column(
             controls=[
                 Container(
                     content=heading,
-                    padding=ft.Padding.only(
+                    padding=Padding.only(
                         top=SPACE["8"], left=SPACE["8"], right=SPACE["8"], bottom=SPACE["4"]
                     ),
                 ),
                 lyrics_section,
             ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            horizontal_alignment=CrossAxisAlignment.CENTER,
             spacing=0,
             expand=True,
         ),
@@ -149,8 +169,8 @@ def _meta_line(track: Track | None) -> str:
     return " · ".join(part for part in parts if part)
 
 
-@ft.component
-def _PlayState(*, is_playing: bool, has_track: bool) -> ft.Control:
+@component
+def _PlayState(*, is_playing: bool, has_track: bool) -> Control:
     """播放状态胶囊：有歌在放时出现，暂停 / 无歌时整行不占位。"""
     if not has_track:
         return Container(height=SPACE["4"])
@@ -159,20 +179,20 @@ def _PlayState(*, is_playing: bool, has_track: bool) -> ft.Control:
     return Container(
         content=Row(
             controls=[
-                ft.Icon(Icons.GRAPHIC_EQ, size=14, color=ft.Colors.ON_PRIMARY),
+                Icon(Icons.GRAPHIC_EQ, size=14, color=Colors.ON_PRIMARY),
                 Text(
                     "正在播放",
                     size=11,
-                    weight=ft.FontWeight.W_600,
-                    color=ft.Colors.ON_PRIMARY,
+                    weight=FontWeight.W_600,
+                    color=Colors.ON_PRIMARY,
                 ),
             ],
             spacing=6,
             # 不 tight 的话 Row 会吃满整行宽度，胶囊就成了一条横贯整页的色带
             tight=True,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            vertical_alignment=CrossAxisAlignment.CENTER,
         ),
-        padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+        padding=Padding.symmetric(horizontal=10, vertical=4),
         border_radius=999,
-        bgcolor=ft.Colors.PRIMARY,
+        bgcolor=Colors.PRIMARY,
     )

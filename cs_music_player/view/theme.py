@@ -17,7 +17,7 @@ cs-ui 算**。
 3. **对比度是算出来的**：主色按 WCAG 解明度（白字压上去 ≥4.5:1），深色模式的
    前景是解出来的深墨而不是固定的白 —— 手挑色值做不到这一点。
 
-**不要**在这里写 ``ft.Theme(...)``：那是 cs-ui 的活。本模块只调用
+**不要**在这里写 ``Theme(...)``：那是 cs-ui 的活。本模块只调用
 :func:`ui.apply_theme`，并在配色切换时把新种子写进全局主题状态。
 """
 
@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ui import Icons, apply_theme, ft, theme_state
+from ui import IconData, Icons, Page, apply_theme, theme_state
 
 from ..models import (
     FONT_FAMILY,
@@ -47,14 +47,14 @@ __all__ = [
 ]
 
 #: 播放模式 → 图标（顺序与 :class:`~cs_music_player.models.PlayMode` 一致）。
-PLAY_MODE_ICONS: dict[PlayMode, ft.IconData] = {
+PLAY_MODE_ICONS: dict[PlayMode, IconData] = {
     PlayMode.SEQUENCE: Icons.REPEAT,
     PlayMode.LOOP_ONE: Icons.REPEAT_ONE,
     PlayMode.SHUFFLE: Icons.SHUFFLE,
 }
 
 #: 明暗模式 → 图标 / 文案（配色面板里的三段胶囊）。
-THEME_ICONS: dict[ThemeMode, ft.IconData] = {
+THEME_ICONS: dict[ThemeMode, IconData] = {
     ThemeMode.LIGHT: Icons.LIGHT_MODE,
     ThemeMode.DARK: Icons.DARK_MODE,
     ThemeMode.SYSTEM: Icons.BRIGHTNESS_AUTO,
@@ -74,7 +74,7 @@ def theme_label(theme: ColorTheme) -> str:
     return name_of(theme)
 
 
-def apply_color_theme(page: ft.Page, color: ColorTheme) -> None:
+def apply_color_theme(page: Page, color: ColorTheme) -> None:
     """只换品牌色（明暗不动）。
 
     换主色是**整页范围**的决定，所以写进 cs-ui 的全局主题状态；随后的
@@ -84,7 +84,7 @@ def apply_color_theme(page: ft.Page, color: ColorTheme) -> None:
 
 
 def sync_theme(
-    page: ft.Page,
+    page: Page,
     color: ColorTheme,
     mode: ThemeMode | str,
     *,
@@ -98,7 +98,7 @@ def sync_theme(
         mode: 明暗模式；``system`` 交给 Flutter 跟随系统亮度。
         on_brightness: 系统亮度变化时的旁路回调（视觉模型据此更新自己的状态）。
 
-    ``apply_theme`` 是**幂等**的：主题状态没变时它仍然重写两个 ``ft.Theme``
+    ``apply_theme`` 是**幂等**的：主题状态没变时它仍然重写两个 ``Theme``
     对象，所以调用方应按「配色 / 明暗」变化去调用（见 ``view/app.py`` 的
     ``use_effect`` 依赖表），不要每帧都调。
     """

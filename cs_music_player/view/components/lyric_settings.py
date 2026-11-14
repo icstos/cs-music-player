@@ -4,7 +4,31 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ui import Container, Icons, Row, SPACE, Text, ft
+from ui import (
+    Alignment,
+    AnimatedSwitcher,
+    AnimatedSwitcherTransition,
+    AnimationCurve,
+    Colors,
+    Column,
+    Container,
+    Control,
+    ControlEvent,
+    CrossAxisAlignment,
+    FontWeight,
+    Icon,
+    IconData,
+    Icons,
+    MainAxisAlignment,
+    Padding,
+    Row,
+    SPACE,
+    Text,
+    TextAlign,
+    component,
+    use_effect,
+    use_state,
+)
 
 from ...models import (
     LYRIC_FONT_DEFAULT,
@@ -24,22 +48,22 @@ def _offset_label(offset: float) -> str:
     return f"{direction} {abs(round(offset, 3)):g}s"
 
 
-@ft.component
+@component
 def LyricSettingsEntry(
     offset: float,
     font_size: float,
     track_path: str,
     on_adjust: Callable[[float], None],
     on_adjust_font: Callable[[float], None],
-) -> ft.Control:
+) -> Control:
     """歌词区右上角两个独立入口：歌词同步 与 字体大小。
 
     各为一个小胶囊，点击展开各自面板（互斥展开），切歌自动收起——「上一首的
     偏移」不该跟着带到下一首，但也不该在切歌时还占着版面。
     """
-    active, set_active = ft.use_state("")
+    active, set_active = use_state("")
     # 切歌时自动收起
-    ft.use_effect(lambda: set_active(""), [track_path])
+    use_effect(lambda: set_active(""), [track_path])
 
     sync_adjusted = offset != 0
     font_changed = abs(font_size - LYRIC_FONT_DEFAULT) > 1e-9
@@ -47,29 +71,29 @@ def LyricSettingsEntry(
     font_active = active == "font"
 
     def pill_button(
-        text: str, tooltip: str, on_click: Callable[[ft.ControlEvent], None]
-    ) -> ft.Control:
+        text: str, tooltip: str, on_click: Callable[[ControlEvent], None]
+    ) -> Control:
         return Container(
             content=Text(
                 text,
                 size=11,
-                weight=ft.FontWeight.W_600,
-                color=ft.Colors.PRIMARY,
+                weight=FontWeight.W_600,
+                color=Colors.PRIMARY,
             ),
-            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            padding=Padding.symmetric(horizontal=8, vertical=4),
             border_radius=8,
-            bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.PRIMARY),
+            bgcolor=Colors.with_opacity(0.12, Colors.PRIMARY),
             ink=True,
             tooltip=tooltip,
             on_click=on_click,
         )
 
     def reset_button(
-        tooltip: str, on_click: Callable[[ft.ControlEvent], None]
-    ) -> ft.Control:
+        tooltip: str, on_click: Callable[[ControlEvent], None]
+    ) -> Control:
         return Container(
-            content=ft.Icon(Icons.REFRESH, size=15, color=t.TEXT_SOFT),
-            padding=ft.Padding.all(5),
+            content=Icon(Icons.REFRESH, size=15, color=t.TEXT_SOFT),
+            padding=Padding.all(5),
             border_radius=8,
             ink=True,
             tooltip=tooltip,
@@ -77,18 +101,18 @@ def LyricSettingsEntry(
         )
 
     def toggle_chip(
-        icon: ft.IconData,
+        icon: IconData,
         label: str,
         is_active: bool,
         is_changed: bool,
         tooltip: str,
-        on_click: Callable[[ft.ControlEvent], None],
-    ) -> ft.Control:
+        on_click: Callable[[ControlEvent], None],
+    ) -> Control:
         highlighted = is_active or is_changed
         return Container(
             content=Row(
                 controls=[
-                    ft.Icon(
+                    Icon(
                         icon,
                         size=16,
                         color=t.ACCENT if highlighted else t.TEXT_SOFT,
@@ -96,20 +120,20 @@ def LyricSettingsEntry(
                     Text(
                         label,
                         size=11,
-                        weight=ft.FontWeight.W_600
+                        weight=FontWeight.W_600
                         if highlighted
-                        else ft.FontWeight.NORMAL,
+                        else FontWeight.NORMAL,
                         color=t.ACCENT if highlighted else t.TEXT_SOFT,
                     ),
                 ],
                 spacing=SPACE["1"],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                vertical_alignment=CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            padding=Padding.symmetric(horizontal=8, vertical=4),
             border_radius=14,
-            bgcolor=ft.Colors.with_opacity(0.10, ft.Colors.TERTIARY)
+            bgcolor=Colors.with_opacity(0.10, Colors.TERTIARY)
             if highlighted
-            else ft.Colors.TRANSPARENT,
+            else Colors.TRANSPARENT,
             ink=True,
             tooltip=tooltip,
             on_click=on_click,
@@ -174,10 +198,10 @@ def LyricSettingsEntry(
             Text(
                 f"{font_size:g}px",
                 size=11,
-                weight=ft.FontWeight.W_600,
+                weight=FontWeight.W_600,
                 color=t.TEXT_SOFT,
                 width=40,
-                text_align=ft.TextAlign.CENTER,
+                text_align=TextAlign.CENTER,
             ),
             *(
                 [
@@ -195,7 +219,7 @@ def LyricSettingsEntry(
         ]
     )
 
-    return ft.Column(
+    return Column(
         controls=[
             Container(
                 content=Row(
@@ -205,13 +229,13 @@ def LyricSettingsEntry(
                         font_toggle,
                     ],
                     spacing=6,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    vertical_alignment=CrossAxisAlignment.CENTER,
                 ),
-                padding=ft.Padding.only(
+                padding=Padding.only(
                     left=SPACE["8"], right=SPACE["8"], top=SPACE["1"]
                 ),
             ),
-            ft.AnimatedSwitcher(
+            AnimatedSwitcher(
                 content=(
                     sync_bar
                     if sync_active
@@ -219,10 +243,10 @@ def LyricSettingsEntry(
                     if font_active
                     else Container(height=0)
                 ),
-                transition=ft.AnimatedSwitcherTransition.FADE,
+                transition=AnimatedSwitcherTransition.FADE,
                 duration=200,
-                switch_in_curve=ft.AnimationCurve.EASE_OUT,
-                switch_out_curve=ft.AnimationCurve.EASE_IN,
+                switch_in_curve=AnimationCurve.EASE_OUT,
+                switch_out_curve=AnimationCurve.EASE_IN,
             ),
         ],
         spacing=0,
@@ -230,18 +254,18 @@ def LyricSettingsEntry(
     )
 
 
-def _toolbar(controls: list[ft.Control]) -> ft.Control:
+def _toolbar(controls: list[Control]) -> Control:
     """一条居中的浅色工具条；高度固定，展开 / 收起时歌词不跳。"""
     return Container(
         content=Row(
             controls=controls,
             spacing=SPACE["2"],
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            alignment=ft.MainAxisAlignment.CENTER,
+            vertical_alignment=CrossAxisAlignment.CENTER,
+            alignment=MainAxisAlignment.CENTER,
         ),
         bgcolor=t.PANEL_HIGH,
         border_radius=10,
-        padding=ft.Padding.symmetric(horizontal=SPACE["3"], vertical=6),
+        padding=Padding.symmetric(horizontal=SPACE["3"], vertical=6),
         height=40,
-        alignment=ft.Alignment.CENTER,
+        alignment=Alignment.CENTER,
     )

@@ -10,7 +10,29 @@
 
 from __future__ import annotations
 
-from ui import Container, Icons, Text, ft
+from ui import (
+    Alignment,
+    Animation,
+    AnimationCurve,
+    ClipBehavior,
+    Colors,
+    Column,
+    Container,
+    Control,
+    CrossAxisAlignment,
+    FontWeight,
+    Icon,
+    IconData,
+    Icons,
+    LayoutSizeChangeEvent,
+    MainAxisAlignment,
+    Padding,
+    Text,
+    TextAlign,
+    TextOverflow,
+    component,
+    use_state,
+)
 
 from ...models import (
     LYRIC_ACTIVE_DELTA,
@@ -90,13 +112,13 @@ def _lyric_window(active: int, total: int, rows: int) -> list[int | None]:
 # ── 歌词行 ── #
 
 
-@ft.component
+@component
 def LyricsLine(
     text: str,
     is_current: bool,
     font_size: float = LYRIC_FONT_DEFAULT,
     row_height: float = 0.0,
-) -> ft.Control:
+) -> Control:
     """一行歌词。
 
     普通行固定为一行高（``row_height``，超出以 ``…`` 收尾）；当前行放大一号
@@ -115,30 +137,30 @@ def LyricsLine(
         content=Text(
             text,
             size=size,
-            weight=ft.FontWeight.W_700 if is_current else ft.FontWeight.NORMAL,
-            color=ft.Colors.PRIMARY if is_current else t.TEXT_SOFT,
-            text_align=ft.TextAlign.CENTER,
+            weight=FontWeight.W_700 if is_current else FontWeight.NORMAL,
+            color=Colors.PRIMARY if is_current else t.TEXT_SOFT,
+            text_align=TextAlign.CENTER,
             max_lines=max_lines,
-            overflow=ft.TextOverflow.ELLIPSIS,
+            overflow=TextOverflow.ELLIPSIS,
         ),
         height=height,
-        alignment=ft.Alignment.CENTER,
-        padding=ft.Padding.symmetric(horizontal=LYRIC_PAD_X, vertical=pad),
+        alignment=Alignment.CENTER,
+        padding=Padding.symmetric(horizontal=LYRIC_PAD_X, vertical=pad),
         # 换行时整行「长高」，200ms 的缓动让台阶变成滑行
-        animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+        animate=Animation(200, AnimationCurve.EASE_OUT),
     )
 
 
 # ── 面板 ── #
 
 
-@ft.component
+@component
 def LyricsPanel(
     lines: list[LyricLine],
     active_index: int,
     has_lyrics_file: bool,
     font_size: float = LYRIC_FONT_DEFAULT,
-) -> ft.Control:
+) -> Control:
     """歌词面板：正在播放的那一行始终停在歌词区垂直中线上。
 
     只渲染「当前行 ± 半屏」的窗口并按中线排布，所以首尾歌词也能居中；
@@ -147,7 +169,7 @@ def LyricsPanel(
 
     当前高亮行索引由视图模型作为派生状态传入（声明式：UI = f(state)）。
     """
-    viewport_height, set_viewport_height = ft.use_state(0.0)
+    viewport_height, set_viewport_height = use_state(0.0)
 
     active = active_index
     row_height = _lyric_row_height(font_size)
@@ -162,13 +184,13 @@ def LyricsPanel(
     )
 
     if not has_lyrics_file:
-        body: ft.Control = _placeholder(
+        body: Control = _placeholder(
             Icons.SUBTITLES_OUTLINED, "暂无歌词", "将同名 .lrc 放在歌曲旁边即可显示"
         )
     elif not lines:
         body = _placeholder(Icons.ERROR_OUTLINE, "歌词文件无法解析", "检查时间轴格式")
     else:
-        body = ft.Column(
+        body = Column(
             controls=[
                 (
                     LyricsLine(lines[index].text, index == active, font_size, row_height)
@@ -178,12 +200,12 @@ def LyricsPanel(
                 for index in window
             ],
             spacing=0,
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            alignment=MainAxisAlignment.CENTER,
+            horizontal_alignment=CrossAxisAlignment.STRETCH,
             expand=True,
         )
 
-    def on_size_change(e: ft.LayoutSizeChangeEvent) -> None:
+    def on_size_change(e: LayoutSizeChangeEvent) -> None:
         """记录歌词区实测高度，用以推算窗口行数。"""
         if abs(e.height - viewport_height) > 0.5:
             set_viewport_height(e.height)
@@ -192,30 +214,30 @@ def LyricsPanel(
         content=body,
         expand=True,
         # 行数按高度算，边缘那半行本该被裁掉 —— 硬裁比让它压到别的控件上好
-        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        clip_behavior=ClipBehavior.HARD_EDGE,
         on_size_change=on_size_change,
     )
 
 
-def _placeholder(icon: ft.IconData, title: str, hint: str) -> ft.Control:
+def _placeholder(icon: IconData, title: str, hint: str) -> Control:
     """空状态：图标 + 一句结论 + 一句怎么做。"""
     return Container(
-        content=ft.Column(
+        content=Column(
             [
-                ft.Icon(icon, size=36, color=t.TEXT_SOFT),
-                Text(title, size=14, weight=ft.FontWeight.W_600, color=t.TEXT_SOFT),
+                Icon(icon, size=36, color=t.TEXT_SOFT),
+                Text(title, size=14, weight=FontWeight.W_600, color=t.TEXT_SOFT),
                 Text(
                     hint,
                     size=12,
                     color=t.TEXT_SOFT,
-                    text_align=ft.TextAlign.CENTER,
+                    text_align=TextAlign.CENTER,
                 ),
             ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            horizontal_alignment=CrossAxisAlignment.CENTER,
             spacing=8,
-            alignment=ft.MainAxisAlignment.CENTER,
+            alignment=MainAxisAlignment.CENTER,
             tight=True,
         ),
         expand=True,
-        alignment=ft.Alignment.CENTER,
+        alignment=Alignment.CENTER,
     )

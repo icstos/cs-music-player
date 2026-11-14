@@ -9,7 +9,9 @@
 
 - 只允许箭头方向的依赖，禁止反向与跨层；
 - 高层只依赖**抽象接口**：service 只允许碰 ``infra.ports``；
-- models / service / viewmodel 三层不得出现任何 UI / 底层技术依赖。
+- models / service / viewmodel 三层不得出现任何 UI / 底层技术依赖；
+- 视图层的 UI 依赖收敛到 ``ui``：既不 import flet，代码里也不出现 flet 前缀
+  （唯一出口是 ``view/components/primitives.py``）。
 """
 
 from __future__ import annotations
@@ -220,6 +222,84 @@ def test_view_never_imports_flet_directly() -> None:
         if "flet" in third_party:
             offenders.append(str(path.relative_to(PACKAGE)))
     assert not offenders, f"视图层不得直接 import flet：{offenders}"
+
+
+#: 视图层唯一允许点名原生控件的文件（其余一律用 ``ui`` 顶层导出的名字）。
+PRIMITIVE_MODULE = Path("view/components/primitives.py")
+
+#: 该文件里允许出现的原生控件名；每加一个都要在模块里写明「为什么 cs-ui 的
+#: 同名组件不能替代」。
+PRIMITIVE_CONTROLS = {"Chip", "Slider"}
+
+
+def _attribute_uses(path: Path, holder: str) -> list[tuple[int, str]]:
+    """``holder.attr`` 形式的属性访问 → ``[(行号, attr)]``。"""
+    tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+    return [
+        (node.lineno, node.attr)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == holder
+    ]
+
+
+def test_view_builds_controls_only_through_cs_ui() -> None:
+    """视图层的控件与设计令牌一律从 ``ui`` 顶层导入，代码里不出现 flet 前缀。
+
+    为什么卡得这么死：``ui`` 对 cs-ui 没封装的名字是**透传** flet 的，所以两种
+    写法功能等价；但「代码里出现 ``ft.``」会让两件事变得不可判定——
+
+    - 这个控件到底来自 cs-ui（可能有更合适的封装）还是被迫用原生？
+    - 换 UI 底座时，哪些调用点需要重写？
+
+    收成一个出口（:mod:`cs_music_player.view.components.primitives`）之后，
+    ``grep "ft\\." view/`` 的结果就是「cs-ui 的缺口清单」，一眼可数。
+    """
+    offenders: list[str] = []
+    for path in sorted((PACKAGE / "view").rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        rel = path.relative_to(PACKAGE)
+        if rel == PRIMITIVE_MODULE:
+            continue
+        offenders += [
+            f"{rel}:{line} ft.{attr}" for line, attr in _attribute_uses(path, "ft")
+        ]
+    assert not offenders, (
+        "视图层不得出现 flet 前缀（控件 / 值类型都从 ui 顶层导入）："
+        f"{offenders}"
+    )
+
+
+def test_primitive_exceptions_stay_explicit() -> None:
+    """原生出入口不允许悄悄变宽：新增控件必须同时改白名单并写明理由。"""
+    used = {attr for _, attr in _attribute_uses(PACKAGE / PRIMITIVE_MODULE, "ft")}
+    unexpected = sorted(used - PRIMITIVE_CONTROLS)
+    assert not unexpected, (
+        f"{PRIMITIVE_MODULE} 里出现了未登记的原生控件 {unexpected}；"
+        "请先确认 cs-ui 没有等价封装，再更新 PRIMITIVE_CONTROLS 与模块说明"
+    )
+    assert used, "primitives 应当至少登记一个原生控件，否则这个文件可以删掉"
+
+
+def test_view_ui_imports_resolve() -> None:
+    """``from ui import X`` 的每个名字都必须真的存在——否则只会在运行时炸。"""
+    import ui  # 延迟导入：本文件的其它用例不依赖 UI 组件库
+
+    missing: list[str] = []
+    for path in sorted((PACKAGE / "view").rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "ui":
+                missing += [
+                    f"{path.name}: ui.{alias.name}"
+                    for alias in node.names
+                    if not hasattr(ui, alias.name)
+                ]
+    assert not missing, f"ui 里没有这些名字：{missing}"
 
 
 def test_viewmodel_and_service_never_touch_the_ui_toolkit() -> None:

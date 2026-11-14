@@ -256,7 +256,7 @@ cs-music-player/
 | 依赖 | 用途 |
 |------|------|
 | [flet](https://flet.dev/) ≥ 1.1.2 | 声明式 UI 运行时（`@ft.component`、`use_state`、`use_effect`） |
-| **cs-ui** ≥ 0.2 | 本地组件库（`import ui`）：布局 / 控件 / 设计令牌 / 主题运行时。视图层**只**依赖它，不直接 import flet |
+| **cs-ui** ≥ 0.2 | 本地组件库（`import ui`）：布局 / 控件 / 设计令牌 / 主题运行时。视图层**只**依赖它，既不 import flet、代码里也不出现 flet 前缀 |
 | [flet-audio](https://pypi.org/project/flet-audio/) ≥ 1.0.4 | 音频播放（由 `infra/audio.py` 封装成引擎，cs-ui 不再包含音频控件） |
 | [mutagen](https://pypi.org/project/mutagen/) ≥ 1.47 | 读取时长、标签（歌手/专辑）、采样率/码率、内嵌封面 |
 | [Pillow](https://python-pillow.org/) ≥ 10.0 | 桌面歌词悬浮窗的逐帧渲染 |
@@ -298,15 +298,15 @@ from cs_music_player.view import tokens, theme_label
 视图层不再维护自己的调色板（旧的 `view/colors.py` 已删除）。颜色有两个来源：
 
 ```python
-from ui import ft
+from ui import Border, Colors, Container
 from cs_music_player.view import tokens as t
 
 # ① 语义角色：界面代码只认「这是画布/面板/正文/强调」，不认具体色值
-Container(bgcolor=t.PANEL, border=ft.Border.all(1, t.LINE))
+Container(bgcolor=t.PANEL, border=Border.all(1, t.LINE))
 
 # ② M3 角色：需要主色系时直接用框架角色名，由 Flutter 在绘制时解析
-Text("正在播放", color=ft.Colors.ON_PRIMARY)
-Container(bgcolor=ft.Colors.PRIMARY, border_radius=999)
+Text("正在播放", color=Colors.ON_PRIMARY)
+Container(bgcolor=Colors.PRIMARY, border_radius=999)
 ```
 
 好处是**换主题时不需要重算任何颜色**：界面里存的是角色名，切主题只是把
@@ -315,6 +315,32 @@ Container(bgcolor=ft.Colors.PRIMARY, border_radius=999)
 加一套配色 = 在 `models/settings.py` 的 `THEME_SEEDS` 里加一行主色种子（外加名字），
 其余 46 个角色自动解算。
 
+### 视图层的 UI 依赖：只有 `ui`
+
+视图层里**不出现 flet 前缀**——控件（`Container` / `Row` / `Column` / `Icon` /
+`PopupMenuButton` …）与值类型（`Colors` / `Alignment` / `Padding` / `Border`）一律从
+`ui` 顶层导入：
+
+```python
+from ui import Container, Icon, Icons, Padding, Row, SPACE, Text, component
+```
+
+为什么连值类型也走 `ui`：`ui` 对 cs-ui 尚未封装的名字是**透传** flet 的，两种写法
+功能等价；但统一之后 `grep "ft\." view/` 的结果就等于「cs-ui 的缺口清单」，一眼可数。
+
+唯一的例外是 `view/components/primitives.py`：
+
+```python
+from ui import ft
+
+TrackSlider = ft.Slider   # cs-ui 的 Slider 是「带标签的表单控件」，同名不同物
+PresetChip = ft.Chip      # cs-ui 的 Chip 是「一组选项 + 选中状态」
+```
+
+三点约束由 `tests/test_architecture.py` 卡死：视图层不得 `import flet`；除
+`primitives.py` 外不得出现 `ft.`；`primitives.py` 里的原生控件必须是白名单里的那几个
+（新增要写明「为什么 cs-ui 的同名组件不能替代」）。
+
 ### 输入框边框（flet 1.x）
 
 `FormFieldControl`（`TextField`、`DropdownM2` 等）的 `border_color`、`border_width`、`border_radius`、
@@ -322,16 +348,16 @@ Container(bgcolor=ft.Colors.PRIMARY, border_radius=999)
 
 ```python
 # 全状态同一形状、颜色交给主题按状态解析
-ft.TextField(border=ft.OutlineInputBorder(border_radius=8))
+TextField(border=OutlineInputBorder(border_radius=8))
 
 # 需要指定各状态颜色时用状态字典（未给 side 的状态回落到 DEFAULT 的 side）
-ft.TextField(
+TextField(
     border={
-        ft.ControlState.DEFAULT: ft.OutlineInputBorder(
-            border_radius=12, side=ft.BorderSide(1, t.LINE)
+        ControlState.DEFAULT: OutlineInputBorder(
+            border_radius=12, side=BorderSide(1, t.LINE)
         ),
-        ft.ControlState.FOCUSED: ft.OutlineInputBorder(
-            border_radius=12, side=ft.BorderSide(2, ft.Colors.PRIMARY)
+        ControlState.FOCUSED: OutlineInputBorder(
+            border_radius=12, side=BorderSide(2, Colors.PRIMARY)
         ),
     }
 )

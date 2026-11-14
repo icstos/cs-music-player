@@ -2,8 +2,9 @@
 
 本层**不包含任何业务逻辑**，只做两件事：把视图模型的状态渲染成控件、
 把用户操作转发给视图模型。因此这里只允许依赖 :mod:`cs_music_player.viewmodel`
-与 :mod:`cs_music_player.models`，UI 侧只认 ``ui`` 一个包——**不直接 import flet**，
-分层测试会盯住这一条。
+与 :mod:`cs_music_player.models`，UI 侧只认 ``ui`` 一个包——既不 import flet、
+代码里也不出现 flet 前缀（唯一的缺口登记在
+:mod:`~cs_music_player.view.components.primitives`），分层测试会盯住这一条。
 
 - :mod:`~cs_music_player.view.tokens` —— 语义角色（哪个位置用哪个 M3 角色）
 - :mod:`~cs_music_player.view.theme` —— 配色 → 品牌色种子、明暗与图标映射

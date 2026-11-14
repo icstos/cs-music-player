@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from ui import ft
+from ui import Page
 
 from .infra.audio import FletAudioEngine
 from .infra.desktop_lyric import DesktopLyricWindow
@@ -39,7 +39,7 @@ DEFAULT_SPEED = 1.0
 
 
 
-def build_view_model(page: ft.Page) -> AppViewModel:
+def build_view_model(page: Page) -> AppViewModel:
     """按「基础设施 → 服务 → 视图模型」的顺序装配整个应用。"""
     # —— 基础设施 —— #
     preferences = install_preferences(page)
@@ -100,7 +100,7 @@ def build_view_model(page: ft.Page) -> AppViewModel:
     )
 
 
-async def run_app(page: ft.Page, startup_path: Path | None = None) -> None:
+async def run_app(page: Page, startup_path: Path | None = None) -> None:
     """渲染主界面并把启动路径交给视图模型。"""
     view_model = build_view_model(page)
     page.on_disconnect = lambda e=None: view_model.shutdown()

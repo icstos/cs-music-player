@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
-from ui import Container, Icons, Text, ft
+from ui import (
+    Alignment,
+    BoxFit,
+    ClipBehavior,
+    Colors,
+    Container,
+    Control,
+    FontWeight,
+    Icon,
+    Icons,
+    Image,
+    Text,
+)
 
 from ...models import Track
 from .. import tokens as t
@@ -22,7 +34,7 @@ def track_cover(
     is_playing: bool = False,
     is_current: bool = False,
     letter_fallback: bool = False,
-) -> ft.Control:
+) -> Control:
     """曲目封面。
 
     Args:
@@ -38,26 +50,26 @@ def track_cover(
 
     if track is not None and track.cover_src:
         return Container(
-            content=ft.Image(
+            content=Image(
                 src=track.cover_src,
                 width=size,
                 height=size,
-                fit=ft.BoxFit.COVER,
+                fit=BoxFit.COVER,
                 gapless_playback=True,
                 # 内嵌图解码失败时不能让那块地方空着：退回首字母
                 error_content=Container(
                     content=Text(
                         letter,
                         size=letter_size,
-                        weight=ft.FontWeight.W_700,
-                        color=ft.Colors.ON_PRIMARY,
+                        weight=FontWeight.W_700,
+                        color=Colors.ON_PRIMARY,
                     ),
-                    alignment=ft.Alignment.CENTER,
+                    alignment=Alignment.CENTER,
                 ),
             ),
             width=size,
             height=size,
-            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+            clip_behavior=ClipBehavior.ANTI_ALIAS,
             border_radius=radius,
         )
 
@@ -66,25 +78,25 @@ def track_cover(
             content=Text(
                 letter,
                 size=letter_size,
-                weight=ft.FontWeight.W_700,
-                color=ft.Colors.ON_TERTIARY if is_playing else ft.Colors.ON_PRIMARY,
+                weight=FontWeight.W_700,
+                color=Colors.ON_TERTIARY if is_playing else Colors.ON_PRIMARY,
             ),
             width=size,
             height=size,
-            alignment=ft.Alignment.CENTER,
-            bgcolor=t.ACCENT if is_playing else ft.Colors.PRIMARY,
+            alignment=Alignment.CENTER,
+            bgcolor=t.ACCENT if is_playing else Colors.PRIMARY,
             border_radius=radius,
         )
 
     return Container(
-        content=ft.Icon(
+        content=Icon(
             Icons.GRAPHIC_EQ if is_current and is_playing else Icons.MUSIC_NOTE,
-            color=ft.Colors.PRIMARY if is_current else t.TEXT_SOFT,
+            color=Colors.PRIMARY if is_current else t.TEXT_SOFT,
             size=max(16, size // 2),
         ),
         width=size,
         height=size,
-        alignment=ft.Alignment.CENTER,
+        alignment=Alignment.CENTER,
         bgcolor=t.SELECTED_BG if is_current else t.PANEL_HIGH,
         border_radius=radius,
     )

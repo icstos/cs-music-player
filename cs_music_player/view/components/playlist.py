@@ -5,19 +5,45 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from ui import (
+    Alignment,
+    Border,
+    BorderRadius,
+    BorderSide,
+    BoxConstraints,
+    BoxDecoration,
+    BoxShadow,
+    ButtonStyle,
+    Colors,
+    Column,
     Container,
+    Control,
+    ControlEvent,
+    CrossAxisAlignment,
+    Duration,
+    FontWeight,
+    GestureDetector,
+    Icon,
+    IconButton,
     Icons,
     ListView,
+    MainAxisAlignment,
+    Offset,
+    Padding,
     Row,
-    SegmentedButton,
     SPACE,
+    SegmentedButton,
     Text,
-    ft,
+    TextAlign,
+    TextField,
+    TextOverflow,
+    TextStyle,
+    Tooltip,
+    component,
 )
 
 from ...models import Track
 from .. import tokens as t
-from .cover import cover_radius, track_cover
+from .cover import track_cover
 from .format import _fmt, _fmt_bitrate, _fmt_frequency, _fmt_size, _kv
 
 __all__ = ["PlaylistItem", "Sidebar"]
@@ -31,7 +57,7 @@ GAP = SPACE["2"]
 # ── 曲目信息悬浮卡 ── #
 
 
-def _track_info_tooltip(track: Track) -> ft.Tooltip:
+def _track_info_tooltip(track: Track) -> Tooltip:
     """曲目信息悬浮卡：延迟出现、跟随光标、反色质感卡片。
 
     用 M3 的 ``INVERSE_SURFACE`` 而不是写死深色：浅色主题下它是深底浅字，
@@ -61,42 +87,42 @@ def _track_info_tooltip(track: Track) -> ft.Tooltip:
         rows.append(_kv("格式", track.audio_format))
 
     body = "\n".join(header + (["─" * 15, *rows] if rows else []))
-    return ft.Tooltip(
+    return Tooltip(
         message=body,
-        text_style=ft.TextStyle(
+        text_style=TextStyle(
             size=11.5,
             height=1.65,
-            color=ft.Colors.ON_INVERSE_SURFACE,
+            color=Colors.ON_INVERSE_SURFACE,
             letter_spacing=0.2,
         ),
-        text_align=ft.TextAlign.START,
-        padding=ft.Padding.symmetric(horizontal=14, vertical=11),
-        decoration=ft.BoxDecoration(
-            bgcolor=ft.Colors.INVERSE_SURFACE,
-            border_radius=ft.BorderRadius.all(10),
-            border=ft.Border.all(
-                1, ft.Colors.with_opacity(0.16, ft.Colors.ON_INVERSE_SURFACE)
+        text_align=TextAlign.START,
+        padding=Padding.symmetric(horizontal=14, vertical=11),
+        decoration=BoxDecoration(
+            bgcolor=Colors.INVERSE_SURFACE,
+            border_radius=BorderRadius.all(10),
+            border=Border.all(
+                1, Colors.with_opacity(0.16, Colors.ON_INVERSE_SURFACE)
             ),
             shadows=[
-                ft.BoxShadow(
+                BoxShadow(
                     blur_radius=22,
-                    color=ft.Colors.with_opacity(0.35, ft.Colors.BLACK),
-                    offset=ft.Offset(0, 6),
+                    color=Colors.with_opacity(0.35, Colors.BLACK),
+                    offset=Offset(0, 6),
                 )
             ],
         ),
-        size_constraints=ft.BoxConstraints(max_width=340),
+        size_constraints=BoxConstraints(max_width=340),
         prefer_below=True,
         vertical_offset=10,
-        wait_duration=ft.Duration(milliseconds=600),
-        exit_duration=ft.Duration(milliseconds=120),
+        wait_duration=Duration(milliseconds=600),
+        exit_duration=Duration(milliseconds=120),
     )
 
 
 # ── 单曲行 ── #
 
 
-@ft.component
+@component
 def PlaylistItem(
     index: int,
     track: Track,
@@ -105,20 +131,20 @@ def PlaylistItem(
     on_select: Callable[[Track], None],
     on_play: Callable[[Track], None],
     on_favorite: Callable[[Track], None],
-) -> ft.Control:
+) -> Control:
     """一行：序号 · 封面 · 标题/歌手 · 时长 · 收藏。
 
     单击选中、双击播放——与文件管理器一致；选中只改「看哪首」，不打断正在响的
     那首（打断是不可撤销的，而选中随时可以改）。
     """
 
-    def _on_select(e: ft.ControlEvent) -> None:
+    def _on_select(e: ControlEvent) -> None:
         on_select(track)
 
-    async def _on_play(e: ft.ControlEvent) -> None:
+    async def _on_play(e: ControlEvent) -> None:
         await on_play(track)
 
-    async def _on_favorite(e: ft.ControlEvent) -> None:
+    async def _on_favorite(e: ControlEvent) -> None:
         await on_favorite(track)
 
     row = Container(
@@ -127,9 +153,9 @@ def PlaylistItem(
                 Text(
                     f"{index + 1:02d}",
                     size=12,
-                    color=ft.Colors.PRIMARY if is_selected else t.TEXT_SOFT,
+                    color=Colors.PRIMARY if is_selected else t.TEXT_SOFT,
                     width=28,
-                    text_align=ft.TextAlign.CENTER,
+                    text_align=TextAlign.CENTER,
                 ),
                 # 信息悬浮卡只挂在封面区域：整行悬浮会挡住行本身的点选判读
                 Container(
@@ -141,17 +167,17 @@ def PlaylistItem(
                     ),
                     tooltip=_track_info_tooltip(track),
                 ),
-                ft.Column(
+                Column(
                     [
                         Text(
                             track.title,
                             size=13,
-                            weight=ft.FontWeight.W_600
+                            weight=FontWeight.W_600
                             if is_selected
-                            else ft.FontWeight.W_500,
+                            else FontWeight.W_500,
                             color=t.SELECTED_TEXT if is_selected else t.TEXT,
                             max_lines=1,
-                            overflow=ft.TextOverflow.ELLIPSIS,
+                            overflow=TextOverflow.ELLIPSIS,
                         ),
                         Row(
                             controls=[
@@ -160,54 +186,54 @@ def PlaylistItem(
                                     size=11,
                                     color=t.TEXT_SOFT,
                                     max_lines=1,
-                                    overflow=ft.TextOverflow.ELLIPSIS,
+                                    overflow=TextOverflow.ELLIPSIS,
                                     expand=True,
                                 ),
                                 Text(
                                     _fmt(track.duration),
                                     size=11,
                                     color=t.TEXT_SOFT,
-                                    text_align=ft.TextAlign.RIGHT,
+                                    text_align=TextAlign.RIGHT,
                                 ),
                             ],
                             spacing=GAP,
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            vertical_alignment=CrossAxisAlignment.CENTER,
                         ),
                     ],
                     spacing=2,
                     expand=True,
                 ),
-                ft.IconButton(
+                IconButton(
                     icon=Icons.FAVORITE if track.favorite else Icons.FAVORITE_BORDER,
-                    icon_color=ft.Colors.TERTIARY
+                    icon_color=Colors.TERTIARY
                     if track.favorite
                     else t.TEXT_SOFT,
                     icon_size=18,
                     tooltip="取消收藏" if track.favorite else "收藏",
                     on_click=_on_favorite,
-                    style=ft.ButtonStyle(
-                        padding=ft.Padding.all(4),
-                        overlay_color=ft.Colors.with_opacity(
-                            0.08, ft.Colors.PRIMARY
+                    style=ButtonStyle(
+                        padding=Padding.all(4),
+                        overlay_color=Colors.with_opacity(
+                            0.08, Colors.PRIMARY
                         ),
                     ),
                 ),
             ],
             spacing=GAP,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            vertical_alignment=CrossAxisAlignment.CENTER,
         ),
-        bgcolor=t.SELECTED_BG if is_selected else ft.Colors.TRANSPARENT,
+        bgcolor=t.SELECTED_BG if is_selected else Colors.TRANSPARENT,
         # 选中态靠一条主色竖线立住，不靠整行反色——列表要能一直扫读
-        border=ft.Border(
-            left=ft.BorderSide(
-                3, ft.Colors.PRIMARY if is_selected else ft.Colors.TRANSPARENT
+        border=Border(
+            left=BorderSide(
+                3, Colors.PRIMARY if is_selected else Colors.TRANSPARENT
             ),
         ),
-        padding=ft.Padding.only(left=8, right=8, top=6, bottom=6),
+        padding=Padding.only(left=8, right=8, top=6, bottom=6),
         ink=True,
     )
 
-    return ft.GestureDetector(
+    return GestureDetector(
         on_tap=_on_select,
         on_double_tap=_on_play,
         content=row,
@@ -217,7 +243,7 @@ def PlaylistItem(
 # ── 侧边栏 ── #
 
 
-@ft.component
+@component
 def Sidebar(
     tracks: list[Track],
     selected: int,
@@ -233,7 +259,7 @@ def Sidebar(
     is_playing: bool,
     on_search_focus: Callable[[], None],
     on_search_blur: Callable[[], None],
-) -> ft.Control:
+) -> Control:
     """音乐库侧栏：标题与计数、搜索、全部/收藏、曲目列表。
 
     标题行给「库里有多少 / 一共多少」两个数——筛选之后「只剩 3 首」和「库里只有
@@ -242,14 +268,14 @@ def Sidebar(
     selected_track = tracks[selected] if 0 <= selected < len(tracks) else None
 
     header = Container(
-        content=ft.Column(
+        content=Column(
             controls=[
                 Row(
                     controls=[
                         Text(
                             "音乐库",
                             size=16,
-                            weight=ft.FontWeight.W_700,
+                            weight=FontWeight.W_700,
                             color=t.TEXT,
                         ),
                         Container(expand=True),
@@ -260,9 +286,9 @@ def Sidebar(
                         ),
                     ],
                     spacing=GAP,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    vertical_alignment=CrossAxisAlignment.CENTER,
                 ),
-                ft.TextField(
+                TextField(
                     value=search,
                     on_change=lambda e: on_search(str(e.control.value or "")),
                     on_focus=lambda e: on_search_focus(),
@@ -284,37 +310,37 @@ def Sidebar(
             ],
             spacing=SPACE["3"],
         ),
-        padding=ft.Padding.only(
+        padding=Padding.only(
             left=SPACE["4"], right=SPACE["4"], top=SPACE["4"], bottom=SPACE["3"]
         ),
-        border=ft.Border(bottom=ft.BorderSide(1, t.LINE)),
+        border=Border(bottom=BorderSide(1, t.LINE)),
     )
 
     if not tracks:
-        body: ft.Control = Container(
-            content=ft.Column(
+        body: Control = Container(
+            content=Column(
                 controls=[
-                    ft.Icon(Icons.LIBRARY_MUSIC_OUTLINED, size=44, color=t.TEXT_SOFT),
+                    Icon(Icons.LIBRARY_MUSIC_OUTLINED, size=44, color=t.TEXT_SOFT),
                     Text(
                         "还没有歌曲",
                         size=14,
-                        weight=ft.FontWeight.W_600,
+                        weight=FontWeight.W_600,
                         color=t.TEXT,
                     ),
                     Text(
                         "点右上角「导入音乐」选择文件夹",
                         size=12,
                         color=t.TEXT_SOFT,
-                        text_align=ft.TextAlign.CENTER,
+                        text_align=TextAlign.CENTER,
                     ),
                 ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                horizontal_alignment=CrossAxisAlignment.CENTER,
                 spacing=8,
-                alignment=ft.MainAxisAlignment.CENTER,
+                alignment=MainAxisAlignment.CENTER,
                 tight=True,
             ),
             expand=True,
-            alignment=ft.Alignment.CENTER,
+            alignment=Alignment.CENTER,
         )
     else:
         body = ListView(
@@ -331,13 +357,13 @@ def Sidebar(
                 for i, track in enumerate(tracks)
             ],
             spacing=2,
-            padding=ft.Padding.symmetric(vertical=SPACE["2"]),
+            padding=Padding.symmetric(vertical=SPACE["2"]),
             expand=True,
         )
 
     return Container(
-        content=ft.Column(controls=[header, body], spacing=0, expand=True),
+        content=Column(controls=[header, body], spacing=0, expand=True),
         width=SIDEBAR_WIDTH,
         bgcolor=t.PANEL,
-        border=ft.Border(right=ft.BorderSide(1, t.LINE)),
+        border=Border(right=BorderSide(1, t.LINE)),
     )
