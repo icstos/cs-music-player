@@ -40,12 +40,15 @@ ALLOWED_PACKAGE_PREFIXES: dict[str, tuple[str, ...]] = {
 }
 
 #: 每层允许引用的第三方包（标准库不限）。
+#:
+#: 视图层只认 ``ui``（本地 cs-ui 组件库）：布局、控件、设计令牌、主题运行时
+#: 全从它取。**不直接依赖 flet** —— 换 UI 底座时只需要改这一个包。
 ALLOWED_THIRD_PARTY: dict[str, tuple[str, ...]] = {
     "models": (),
     "service": (),
     "viewmodel": (),
     "infra": ("flet", "flet_audio", "flet_desktop", "mutagen", "PIL"),
-    "view": ("flet",),
+    "view": ("ui",),
 }
 
 STDLIB = set(sys.stdlib_module_names)
@@ -200,6 +203,23 @@ def test_third_party_dependencies_are_layer_appropriate(layer: str, path: Path) 
     assert not offenders, (
         f"{layer} 层不得引用 {offenders}（允许：{allowed}）——{path.name}"
     )
+
+
+def test_view_never_imports_flet_directly() -> None:
+    """视图层的 UI 依赖必须收敛到 ``ui`` 一个包。
+
+    这条比「允许 flet」更严：``from ui import ft`` 与 ``import flet`` 在实现上
+    等价，但在**架构上**后者意味着「这个应用直接绑定了 flet 的 API 面」。约束
+    住这一点，换底座（或 cs-ui 内部换实现）时改动面才是可控的。
+    """
+    offenders: list[str] = []
+    for path in PACKAGE.rglob("*.py"):
+        if "__pycache__" in path.parts or _layer_of(path.relative_to(PACKAGE)) != "view":
+            continue
+        _, third_party = _imports(path)
+        if "flet" in third_party:
+            offenders.append(str(path.relative_to(PACKAGE)))
+    assert not offenders, f"视图层不得直接 import flet：{offenders}"
 
 
 def test_viewmodel_and_service_never_touch_the_ui_toolkit() -> None:

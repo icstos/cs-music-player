@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-import flet as ft
+from ui import ft
 
 from .infra.audio import FletAudioEngine
 from .infra.desktop_lyric import DesktopLyricWindow
@@ -20,6 +20,7 @@ from .infra.lyrics_repository import LocalLyricsRepository
 from .infra.metadata import MutagenMetadataReader
 from .infra.picker import install_directory_picker
 from .infra.preferences import install_preferences
+from .infra.win_appearance import set_dark_title_bar
 from .service.desktop_lyric import DesktopLyricService
 from .service.folders import FolderHistoryService
 from .service.library import LibraryService
@@ -103,5 +104,11 @@ async def run_app(page: ft.Page, startup_path: Path | None = None) -> None:
     """渲染主界面并把启动路径交给视图模型。"""
     view_model = build_view_model(page)
     page.on_disconnect = lambda e=None: view_model.shutdown()
-    page.render(PlayerApp, page, view_model)
+    page.render(
+        PlayerApp,
+        page,
+        view_model,
+        # 原生标题栏不在 Flutter 画布里，只能由组装根把平台实现递给视图
+        lambda dark: set_dark_title_bar(page.title, dark),
+    )
     page.run_task(view_model.initialize, startup_path)

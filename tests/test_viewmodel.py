@@ -458,6 +458,55 @@ def test_desktop_lock_and_font_are_reflected() -> None:
     assert vm.desktop_font == 26.0
 
 
+def test_toggle_play_starts_the_selected_track_when_nothing_is_loaded(
+    tmp_path: Path,
+) -> None:
+    """刚导入列表（未起播）时按播放键：应该放「选中的那首」，而不是第一首。"""
+    folder = tmp_path / "music"
+    _write_songs(folder, ["a.mp3", "b.mp3", "c.mp3"])
+    vm, parts = make_view_model(picker=FakePicker(str(folder)))
+    asyncio.run(vm.import_music_folder())
+
+    vm.select(vm.tracks[2])
+    asyncio.run(vm.toggle_play())
+
+    assert vm.current == 2
+    assert vm.is_playing is True
+    assert parts["engine"].loads[-1].name == "c.mp3"
+
+    # 再按一次：这次是真正的「暂停」，不该重新装载
+    loads_before = len(parts["engine"].loads)
+    asyncio.run(vm.toggle_play())
+    assert len(parts["engine"].loads) == loads_before
+    assert vm.is_playing is False
+
+
+def test_toggle_play_without_tracks_is_harmless() -> None:
+    vm, _ = make_view_model()
+
+    asyncio.run(vm.toggle_play())  # 不抛异常即可
+
+    assert vm.current == -1
+    assert vm.is_playing is False
+
+
+def test_overlay_toggle_also_starts_the_selected_track(tmp_path: Path) -> None:
+    folder = tmp_path / "music"
+    _write_songs(folder, ["a.mp3", "b.mp3"])
+    vm, parts = make_view_model(picker=FakePicker(str(folder)))
+    asyncio.run(vm.import_music_folder())
+    vm.select(vm.tracks[1])
+
+    async def flow() -> None:
+        vm.on_desktop_command("toggle")
+        await asyncio.sleep(0)
+
+    asyncio.run(flow())
+
+    assert vm.current == 1
+    assert vm.is_playing is True
+
+
 def test_overlay_buttons_drive_playback(tmp_path: Path) -> None:
     folder = tmp_path / "music"
     _write_songs(folder, ["a.mp3", "b.mp3"])

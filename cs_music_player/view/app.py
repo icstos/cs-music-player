@@ -6,18 +6,35 @@
 2. 把用户操作转成视图模型的方法调用。
 
 状态变化由视图模型广播，本组件订阅后重渲染，因此「UI = f(状态)」。
+
+界面只依赖 ``ui``（cs-ui 组件库）：布局用它的 ``Container`` / ``Row`` /
+``Column`` / ``ListView``，控件用 ``Button`` / ``SegmentedButton``，颜色一律走
+M3 角色（见 :mod:`cs_music_player.view.tokens`）。原生 ``ft.*`` 只在这些场景出现：
+cs-ui 没有等价物（``Icon`` / ``IconButton`` / ``Slider`` / ``PopupMenuButton`` /
+``GestureDetector``），或者需要用到框架层的浮层与动画。
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
 from pathlib import Path
-
-import flet as ft
-
 from typing import Any
 
+from ui import (
+    Button,
+    Container,
+    Icons,
+    Message,
+    Row,
+    SPACE,
+    StyleType,
+    Text,
+    ft,
+)
+
+from ..models import ThemeMode
 from ..viewmodel import AppViewModel
+from . import tokens as t
 from .components import (
     DesktopLyricButton,
     MainStage,
@@ -27,14 +44,29 @@ from .components import (
     ThemeMenuButton,
     build_sleep_dialog,
 )
-from .theme import apply_palette, palette, sync_page_theme
+from .theme import sync_theme
 
-__all__ = ["PlayerApp"]
+__all__ = ["PlayerApp", "build_history_menu"]
+
+#: 顶栏高度：与「导入音乐」按钮（36）上下各留 12 的呼吸。
+TOOLBAR_PAD_Y = SPACE["3"]
 
 
 @ft.component
-def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
-    """应用主界面。"""
+def PlayerApp(
+    page: ft.Page,
+    vm: AppViewModel,
+    on_appearance: Callable[[bool], None] | None = None,
+) -> ft.Control:
+    """应用主界面。
+
+    Args:
+        page: 页面。
+        vm: 视图模型。
+        on_appearance: 明暗切换后的旁路回调（参数为「是否深色」）。原生标题栏
+            这类**不属于 Flutter 画布**的东西由组装根注入，视图只负责「什么时候
+            通知」，不碰任何平台细节。
+    """
     # 视图模型是不可变数据源；用一个自增版本号驱动整棵树重渲染。
     revision, set_revision = ft.use_state(0)
     invalidate = ft.use_ref(lambda: None)
@@ -52,23 +84,24 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
         invalidate.current()
 
     ft.use_effect(lambda: vm.subscribe(on_state_changed), [vm])
-    ft.use_effect(lambda: _remember_page_hooks(), dependencies=[])
 
-    # —— 主题：先换调色板，再渲染 —— #
+    # —— 主题：配色 / 明暗变了才重下发页面级主题 —— #
     color_theme = vm.color_theme
-    effective_theme = str(vm.effective_theme)
-    apply_palette(color_theme, effective_theme)
+    theme_mode = vm.theme_mode
 
-    def push_page_theme() -> None:
-        """主题是页面级属性：渲染完把补丁推给客户端。
+    def push_theme() -> None:
+        sync_theme(
+            page,
+            color_theme,
+            theme_mode,
+            on_brightness=vm.set_system_brightness,
+        )
+        if on_appearance is not None:
+            on_appearance(vm.effective_theme == ThemeMode.DARK)
 
-        组件模式下属性赋值不会自动下发，必须显式 ``page.update()``；
-        调色板已经在渲染前切好，所以这里只补页面自身的属性。
-        """
-        sync_page_theme(page, color_theme, effective_theme)
-        page.update()
-
-    ft.use_effect(push_page_theme, [color_theme, effective_theme])
+    # 依赖取「解析后的明暗」而不是「用户选的模式」：跟随系统时，系统亮度变化
+    # 也要让原生标题栏跟着换色。
+    ft.use_effect(push_theme, [color_theme, str(vm.effective_theme)])
 
     # —— 提示 —— #
     toast_serial = vm.toast.serial if vm.toast is not None else 0
@@ -76,19 +109,12 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
     def show_toast() -> None:
         if vm.toast is None:
             return
-        page.show_dialog(
-            ft.SnackBar(
-                content=ft.Text(vm.toast.message),
-                behavior=ft.SnackBarBehavior.FLOATING,
-                margin=ft.Margin.only(left=16, right=16, bottom=16),
-                duration=ft.Duration(milliseconds=2200),
-                bgcolor=palette.SURFACE,
-            )
-        )
+        Message.info(vm.toast.message).show(page)
 
     ft.use_effect(show_toast, [toast_serial])
 
-    # —— 交互适配：视图只负责把事件转成视图模型调用 —— #
+    # —— 交互适配 —— #
+
     def run_async(
         handler: Callable[..., Coroutine[Any, Any, object]], *args: object
     ) -> None:
@@ -96,14 +122,13 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
         page.run_task(handler, *args)
 
     def _remember_page_hooks() -> None:
-        """页面级回调：平台亮度变化、全局快捷键。"""
+        """页面级回调：全局快捷键。
 
-        def on_brightness(e: ft.ControlEvent) -> None:
-            vm.set_system_brightness(str(page.platform_brightness))
+        Esc 收起当前弹窗（桌面软件的常规预期；配色菜单由原生 PopupMenu 自己
+        处理 Esc）；空格播放 / 暂停——但输入框有焦点时不抢空格。
+        """
 
         def on_keyboard(e: ft.KeyboardEvent) -> None:
-            # Esc 收起当前弹窗（桌面软件的常规预期；配色菜单由原生
-            # PopupMenu 自己处理 Esc）
             if e.key == "Escape":
                 if sleep_dialog.current is not None:
                     close_sleep_dialog()
@@ -114,8 +139,9 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
                 return
             run_async(vm.toggle_play)
 
-        page.on_platform_brightness_change = on_brightness
         page.on_keyboard_event = on_keyboard
+
+    ft.use_effect(_remember_page_hooks, dependencies=[])
 
     # —— 睡眠定时器弹窗（视图自持的瞬时 UI 状态）—— #
 
@@ -147,140 +173,43 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
         sleep_dialog.current = dialog
         page.show_dialog(dialog)
 
-    # —— 工具栏：历史文件夹菜单 —— #
-
-    def build_folder_item(folder: str, pinned: bool) -> ft.PopupMenuItem:
-        path = Path(folder)
-        name = path.name or folder
-        return ft.PopupMenuItem(
-            tooltip=folder,
-            content=ft.Row(
-                [
-                    ft.Icon(
-                        ft.Icons.PUSH_PIN if pinned else ft.Icons.FOLDER_OPEN,
-                        size=15,
-                        color=palette.ACCENT if pinned else palette.PRIMARY_DARK,
-                    ),
-                    ft.Text(
-                        name,
-                        size=12,
-                        color=palette.TEXT_MAIN,
-                        max_lines=1,
-                        overflow=ft.TextOverflow.ELLIPSIS,
-                        expand=True,
-                    ),
-                    ft.IconButton(
-                        icon=(
-                            ft.Icons.PUSH_PIN_OUTLINED
-                            if not pinned
-                            else ft.Icons.PUSH_PIN
-                        ),
-                        icon_size=14,
-                        icon_color=palette.ACCENT if pinned else palette.TEXT_MUTED,
-                        tooltip="取消固定" if pinned else "固定文件夹",
-                        on_click=lambda e, f=folder: run_async(vm.toggle_pin_folder, f),
-                        padding=ft.Padding.all(2),
-                    ),
-                ],
-                spacing=8,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            on_click=lambda e, f=folder: run_async(vm.open_recent_folder, f),
-        )
-
-    def build_section_header(text: str) -> ft.PopupMenuItem:
-        return ft.PopupMenuItem(
-            content=ft.Text(
-                text,
-                size=11,
-                weight=ft.FontWeight.W_600,
-                color=palette.TEXT_MUTED,
-            ),
-            height=32,
-        )
-
-    recent_items: list[ft.PopupMenuItem] = []
-    pinned_set = set(vm.pinned_folders)
-    pinned_list = [f for f in vm.recent_folders if f in pinned_set] + [
-        f for f in sorted(pinned_set) if f not in vm.recent_folders
-    ]
-    recent_list = [f for f in vm.recent_folders if f not in pinned_set]
-    if pinned_list:
-        recent_items.append(build_section_header("固定文件夹"))
-        recent_items.extend(build_folder_item(f, True) for f in pinned_list)
-        if recent_list:
-            recent_items.append(
-                ft.PopupMenuItem(
-                    content=ft.Divider(height=1, color=palette.BORDER),
-                    height=1,
-                )
-            )
-    if recent_list:
-        recent_items.append(build_section_header("最近打开"))
-        recent_items.extend(build_folder_item(f, False) for f in recent_list)
-    if not pinned_list and not recent_list:
-        recent_items.append(
-            ft.PopupMenuItem(
-                content=ft.Text("暂无历史文件夹", size=12, color=palette.TEXT_MUTED),
-                on_click=lambda e: None,
-            )
-        )
-    elif recent_list:
-        recent_items.append(
-            ft.PopupMenuItem(
-                content=ft.Divider(height=1, color=palette.BORDER),
-                height=1,
-            )
-        )
-        recent_items.append(
-            ft.PopupMenuItem(
-                content=ft.Row(
-                    [
-                        ft.Icon(
-                            ft.Icons.DELETE_OUTLINE, size=15, color=palette.TEXT_MUTED
-                        ),
-                        ft.Text("清空历史", size=12, color=palette.TEXT_DIM),
-                    ],
-                    spacing=8,
-                ),
-                on_click=lambda e: run_async(vm.clear_recent_history),
-            )
-        )
-
-    menu_width = 300
+    # —— 提示文案 —— #
     track = vm.display_track
 
-    toolbar = ft.Container(
-        content=ft.Row(
-            [
-                ft.Row(
-                    [
-                        ft.Container(
+    def on_search_focus() -> None:
+        search_focused.current = True
+
+    def on_search_blur() -> None:
+        search_focused.current = False
+
+    toolbar = Container(
+        content=Row(
+            controls=[
+                Row(
+                    controls=[
+                        Container(
                             content=ft.Icon(
-                                ft.Icons.LIBRARY_MUSIC, color=palette.ON_PRIMARY, size=20
+                                Icons.LIBRARY_MUSIC,
+                                color=ft.Colors.ON_PRIMARY,
+                                size=20,
                             ),
                             width=36,
                             height=36,
                             alignment=ft.Alignment.CENTER,
-                            bgcolor=palette.PRIMARY,
+                            bgcolor=ft.Colors.PRIMARY,
                             border_radius=10,
                         ),
-                        ft.Text(
+                        Text(
                             "CS 音乐播放器",
                             size=16,
                             weight=ft.FontWeight.W_700,
-                            color=palette.TEXT_MAIN,
+                            color=t.TEXT,
                         ),
                     ],
-                    spacing=10,
+                    spacing=SPACE["3"],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
-                ft.Container(expand=True),
-                ft.Text(
-                    "正在播放" if vm.is_playing and track else "",
-                    size=12,
-                    color=palette.TEXT_DIM,
-                    italic=True,
-                ),
+                Container(expand=True),
                 SleepTimerButton(vm.sleep_remaining, open_sleep_dialog),
                 DesktopLyricButton(
                     vm.desktop_enabled,
@@ -294,58 +223,42 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
                 ),
                 ThemeMenuButton(
                     color_theme,
-                    vm.theme_mode,
+                    theme_mode,
                     vm.set_color_theme,
                     vm.set_theme_mode,
                 ),
-                ft.PopupMenuButton(
-                    icon=ft.Icons.HISTORY,
-                    icon_color=palette.PRIMARY_DARK,
-                    icon_size=22,
-                    tooltip="历史文件夹",
-                    style=ft.ButtonStyle(padding=ft.Padding.all(8)),
-                    menu_position=ft.PopupMenuPosition.UNDER,
-                    size_constraints=ft.BoxConstraints(
-                        min_width=menu_width, max_width=menu_width
-                    ),
-                    items=recent_items,
+                build_history_menu(
+                    vm.recent_folders,
+                    vm.pinned_folders,
+                    lambda folder: run_async(vm.open_recent_folder, folder),
+                    lambda folder: run_async(vm.toggle_pin_folder, folder),
+                    lambda: run_async(vm.clear_recent_history),
                 ),
-                ft.Button(
-                    content="导入音乐",
-                    icon=ft.Icons.FOLDER_OPEN,
+                Button(
+                    "导入音乐",
+                    icon=Icons.FOLDER_OPEN,
+                    style_type=StyleType.PRIMARY,
                     on_click=lambda e: run_async(vm.import_music_folder),
-                    style=ft.ButtonStyle(
-                        bgcolor={
-                            ft.ControlState.DEFAULT: palette.PRIMARY,
-                            ft.ControlState.HOVERED: palette.PRIMARY_DARK,
-                        },
-                        color=palette.ON_PRIMARY,
-                        padding=ft.Padding.symmetric(horizontal=16, vertical=10),
-                    ),
                 ),
             ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            spacing=SPACE["2"],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        bgcolor=palette.SURFACE,
-        border=ft.Border(bottom=ft.BorderSide(1, palette.BORDER)),
-        padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+        bgcolor=t.PANEL,
+        border=ft.Border(bottom=ft.BorderSide(1, t.LINE)),
+        padding=ft.Padding.symmetric(
+            horizontal=SPACE["4"], vertical=TOOLBAR_PAD_Y
+        ),
     )
 
-    def on_search_focus() -> None:
-        search_focused.current = True
-
-    def on_search_blur() -> None:
-        search_focused.current = False
-
-    return ft.Container(
+    return Container(
         expand=True,
-        bgcolor=palette.BG,
+        bgcolor=t.CANVAS,
         content=ft.Column(
-            [
+            controls=[
                 toolbar,
-                ft.Row(
-                    [
+                Row(
+                    controls=[
                         Sidebar(
                             vm.filtered_tracks,
                             vm.filtered_selected,
@@ -400,3 +313,134 @@ def PlayerApp(page: ft.Page, vm: AppViewModel) -> ft.Control:
         ),
     )
 
+
+# ── 工具栏：历史文件夹菜单 ── #
+
+#: 菜单宽度：够放下「盘符 + 两级目录名」，再宽就变成一堵墙。
+HISTORY_MENU_WIDTH = 300
+
+
+def build_history_menu(
+    recent: list[str],
+    pinned: set[str],
+    on_open: Callable[[str], None],
+    on_toggle_pin: Callable[[str], None],
+    on_clear: Callable[[], None],
+) -> ft.PopupMenuButton:
+    """历史文件夹下拉菜单：固定组在前、最近组在后，每条都能就地固定 / 取消。
+
+    两级分组解决一个具体问题：常用的三个文件夹会随使用不断往下沉，固定之后就
+    永远在手边。
+    """
+    pinned_list = [folder for folder in recent if folder in pinned] + [
+        folder for folder in sorted(pinned) if folder not in recent
+    ]
+    recent_list = [folder for folder in recent if folder not in pinned]
+
+    items: list[ft.PopupMenuItem] = []
+    if pinned_list:
+        items.append(_menu_header("固定文件夹"))
+        items.extend(
+            _folder_item(folder, True, on_open, on_toggle_pin) for folder in pinned_list
+        )
+        if recent_list:
+            items.append(_menu_divider())
+    if recent_list:
+        items.append(_menu_header("最近打开"))
+        items.extend(
+            _folder_item(folder, False, on_open, on_toggle_pin)
+            for folder in recent_list
+        )
+    if not pinned_list and not recent_list:
+        items.append(
+            ft.PopupMenuItem(
+                content=Text("暂无历史文件夹", size=12, color=t.TEXT_SOFT),
+                on_click=lambda e: None,
+            )
+        )
+    elif recent_list:
+        items.append(_menu_divider())
+        items.append(
+            ft.PopupMenuItem(
+                content=Row(
+                    controls=[
+                        ft.Icon(Icons.DELETE_OUTLINE, size=15, color=t.TEXT_SOFT),
+                        Text("清空历史", size=12, color=t.TEXT_SOFT),
+                    ],
+                    spacing=SPACE["2"],
+                ),
+                on_click=lambda e: on_clear(),
+            )
+        )
+
+    return ft.PopupMenuButton(
+        icon=Icons.HISTORY,
+        icon_color=t.TEXT_SOFT,
+        icon_size=22,
+        tooltip="历史文件夹",
+        style=ft.ButtonStyle(padding=ft.Padding.all(8)),
+        menu_position=ft.PopupMenuPosition.UNDER,
+        size_constraints=ft.BoxConstraints(
+            min_width=HISTORY_MENU_WIDTH, max_width=HISTORY_MENU_WIDTH
+        ),
+        items=items,
+    )
+
+
+def _menu_header(text: str) -> ft.PopupMenuItem:
+    """分组标题：不可点，只用来「分段」。"""
+    return ft.PopupMenuItem(
+        content=Text(
+            text,
+            size=11,
+            weight=ft.FontWeight.W_600,
+            color=t.TEXT_SOFT,
+        ),
+        height=32,
+    )
+
+
+def _menu_divider() -> ft.PopupMenuItem:
+    return ft.PopupMenuItem(content=ft.Divider(height=1, color=t.LINE), height=1)
+
+
+def _folder_item(
+    folder: str,
+    pinned: bool,
+    on_open: Callable[[str], None],
+    on_toggle_pin: Callable[[str], None],
+) -> ft.PopupMenuItem:
+    """一条历史记录：左边图标表示「已固定 / 普通」，右边图钉就地固定。"""
+    path = Path(folder)
+    name = path.name or folder
+    return ft.PopupMenuItem(
+        tooltip=folder,
+        content=Row(
+            controls=[
+                ft.Icon(
+                    Icons.PUSH_PIN if pinned else Icons.FOLDER_OPEN,
+                    size=15,
+                    color=t.ACCENT if pinned else t.TEXT_SOFT,
+                ),
+                Text(
+                    name,
+                    size=12,
+                    color=t.TEXT,
+                    max_lines=1,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                    expand=True,
+                ),
+                ft.IconButton(
+                    icon=Icons.PUSH_PIN_OUTLINED if not pinned else Icons.PUSH_PIN,
+                    icon_size=14,
+                    icon_color=t.ACCENT if pinned else t.TEXT_SOFT,
+                    tooltip="取消固定" if pinned else "固定文件夹",
+                    on_click=lambda e, f=folder: on_toggle_pin(f),
+                    padding=ft.Padding.all(2),
+                ),
+            ],
+            spacing=SPACE["2"],
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        on_click=lambda e, f=folder: on_open(f),
+    )

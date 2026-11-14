@@ -1,7 +1,8 @@
 """共享常量：文件格式、播放模式、速度、歌词版式、桌面歌词尺寸、本地字体。
 
-配色不在这里：调色板由「配色主题 + 明暗」在视图层推导
-（见 :mod:`cs_music_player.view.colors`），本模块不依赖任何第三方库。
+配色也不在这里：每套配色只有一个「品牌色种子」，46 个界面角色由 cs-ui 的
+色板引擎从种子解算（见 :data:`~cs_music_player.models.THEME_SEEDS`）。
+本模块不依赖任何第三方库。
 """
 
 from __future__ import annotations

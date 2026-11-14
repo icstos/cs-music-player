@@ -322,7 +322,16 @@ class AppViewModel(ObservableModel):
     # ────────────────────────────────────────────────
 
     async def toggle_play(self) -> None:
-        """播放 / 暂停。"""
+        """播放 / 暂停。
+
+        还没装载曲目时（刚导入列表、只点选了一首），从**当前选中项**起播：
+        用户点过哪一首就是想听哪一首，没道理从第一首开始。
+        """
+        if not self._playback.loaded:
+            index = self.selected if self.selected >= 0 else 0
+            if 0 <= index < len(self.tracks):
+                await self._playback.play_at(index)
+            return
         await self._playback.toggle()
 
     async def next_track(self) -> None:
@@ -532,7 +541,8 @@ class AppViewModel(ObservableModel):
     def on_desktop_command(self, name: str) -> None:
         """悬浮窗上的播放控制键（已由组装根投递回事件循环）。"""
         if name == "toggle":
-            self._spawn(self._playback.toggle())
+            # 走和主界面播放键同一条路：没装载曲目时也能从选中项起播
+            self._spawn(self.toggle_play())
         elif name == "next":
             self._spawn(self._playback.next())
         elif name == "prev":

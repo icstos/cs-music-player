@@ -1,12 +1,12 @@
 """CS Music Player 入口。
 
 「进程启动 → 窗口可见」这条路上，去掉 Python 自身的启动时间后，真正省不掉的
-只有三件事：``import flet``、``ft.run`` 里导入消息层、以及拉起客户端进程。
-剩下两块一次性开销则可以藏起来，实测约省 140ms：
+只有三件事：``import flet``（``import ui`` 会带上它）、``ft.run`` 里导入消息层、
+以及拉起客户端进程。剩下两块一次性开销则可以藏起来，实测约省 140ms：
 
 - 业务模块导入（连带 flet_audio）≈ 43ms；
-- 首次 ``ft.Theme(...)`` 构造 ≈ 96ms——flet 把 ``flet.controls.theme`` 藏在包
-  级的 ``__getattr__`` 后面惰性导入，一上来要加载 58 个模块。
+- 首次 ``ft.Theme(...)`` 构造 ≈ 96ms——flet 把 ``flet.controls.theme`` 藏在包级
+  的 ``__getattr__`` 后面惰性导入，一上来要加载 58 个模块。
 
 桌面端外壳被拉起后，约 140ms 才回连注册、再约 90ms 才画出第一帧；这段时间
 Python 侧本来在空转（主线程止于 ``await`` 客户端进程，GIL 是空的，后台线程能
@@ -19,18 +19,23 @@ Python 侧本来在空转（主线程止于 ``await`` 客户端进程，GIL 是�
 
 窗口参数仍然必须在注册阶段（``before_main``）就定下来：外壳会先用默认尺寸
 （1280×720）、默认位置建窗，晚设就会「左上角闪一下再跳尺寸」。
+
+主题也在这里先铺一遍：窗口显示前就有一棵完整的主题树，首帧不会先白一下再
+变成深色。这里**只用** ``ui.build_theme`` 造两棵树，不用 ``apply_theme`` ——
+后者会顺手绑系统亮度监听，而那个监听要等视图模型建好后才能绑上回调。
 """
 
 from __future__ import annotations
 
 import asyncio
 import threading
-from typing import Any
 from contextlib import suppress
-
-import flet as ft
+from typing import TYPE_CHECKING, Any
 
 from cs_music_player.infra.startup_args import parse_startup_path
+
+if TYPE_CHECKING:  # 只为类型注解；运行期不导入 ui，启动路径保持最短
+    from ui import ft
 
 STARTUP_PATH = parse_startup_path()
 
@@ -45,18 +50,23 @@ REVEAL_TIMEOUT = 5.0
 
 
 def prewarm() -> None:
-    """导入业务模块并构造一次主题。
+    """导入业务模块，并把明暗两棵主题树先造出来。
 
     两块都是纯补的一次性开销（模块导入 + flet 的惰性导入），提前做掉不改变
     任何运行期行为；重复调用也无副作用（``sys.modules`` 已缓存，主题构造在
     热态只要 0.01ms）。
     """
 
-    from cs_music_player.bootstrap import build_view_model  # noqa: F401  预热导入
-    from cs_music_player.view import theme as theme_module
+    from ui import build_theme, theme_state
 
-    theme_module.build_light_theme()
-    theme_module.build_dark_theme()
+    from cs_music_player.bootstrap import build_view_model  # noqa: F401  预热导入
+    from cs_music_player.models import FONT_FAMILY
+
+    state = theme_state()
+    state.font_family = FONT_FAMILY
+    state.set_primary(_initial_seed())
+    build_theme(state, "light")
+    build_theme(state, "dark")
 
 
 def install_prewarm_hook() -> bool:
@@ -93,19 +103,20 @@ HOOK_INSTALLED = install_prewarm_hook()
 
 
 def configure_window(page: ft.Page) -> None:
-    """在客户端注册阶段（窗口尚未显示）就把窗口参数定下来。
+    """在客户端注册阶段（窗口尚未显示）就把窗口与主题定下来。
 
     桌面端外壳会先用默认尺寸（1280×720）、默认位置（屏幕左上角）建一个窗口，
     等 Python 端连上才改成目标尺寸。若这时窗口已经可见，用户看到的就是
     「左上角闪一下、再跳成正常窗口」。
 
-    因此这里做两件事：
+    因此这里做三件事：
 
-    1. ``visible = False`` —— 窗口先不露出，等首帧内容画好再由
+    1. 写下明暗两套主题与页面底色 —— 客户端按 ``theme_mode`` 挑一棵现成的树，
+       首帧就是正确的配色，不需要等 Python 重算；
+    2. ``visible = False`` —— 窗口先不露出，等首帧内容画好再由
        :func:`reveal_window` 一次性显示；
-    2. 立刻填一个与主题同色的占位页 —— 客户端在「还没有页面」时会先画出白底
-       Flet logo 的等待页，显示瞬间可能露出 1~3 帧；有占位页时实测 4/5 次
-       首帧就是完整界面。
+    3. 立刻填一个与主题同色的占位页 —— 客户端在「还没有页面」时会先画出白底
+       Flet logo 的等待页，显示瞬间可能露出 1~3 帧。
     """
 
     if not HOOK_INSTALLED:
@@ -113,19 +124,21 @@ def configure_window(page: ft.Page) -> None:
         # 否则它会算进「注册补丁晚发」的时间里。
         prewarm()
 
+    from ui import build_theme, ft, theme_state
+
     from cs_music_player.models import FONT_FAMILY, FONT_FAMILY_FILE
-    from cs_music_player.view.theme import (
-        build_dark_theme,
-        build_light_theme,
-        palette,
-    )
+
+    state = theme_state()
+    state.font_family = FONT_FAMILY
+    state.set_primary(_initial_seed())
+    state.set_mode("light")
 
     page.title = "CS 音乐播放器"
     page.fonts = {FONT_FAMILY: FONT_FAMILY_FILE}
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.theme = build_light_theme()
-    page.dark_theme = build_dark_theme()
-    page.bgcolor = palette.BG
+    page.theme = build_theme(state, "light")
+    page.dark_theme = build_theme(state, "dark")
+    page.bgcolor = ft.Colors.SURFACE
     page.padding = 0
 
     page.window.visible = False
@@ -136,7 +149,7 @@ def configure_window(page: ft.Page) -> None:
     page.window.resizable = True
     page.window.maximizable = True
 
-    page.controls = [ft.Container(bgcolor=palette.BG, expand=True)]
+    page.controls = [ft.Container(bgcolor=ft.Colors.SURFACE, expand=True)]
 
 
 async def reveal_window(page: ft.Page) -> None:
@@ -162,7 +175,16 @@ async def main(page: ft.Page) -> None:
         await reveal_window(page)
 
 
+def _initial_seed() -> str:
+    """启动配色：用户没切过主题时就是它，切过也会在第一帧之后被换掉。"""
+    from cs_music_player.models import DEFAULT_THEME_SEED
+
+    return DEFAULT_THEME_SEED
+
+
 if __name__ == "__main__":
+    from ui import ft
+
     ft.run(
         main,
         before_main=configure_window,

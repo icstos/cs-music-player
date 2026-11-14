@@ -17,7 +17,7 @@ from ..infra.ports import (
     MetadataPort,
     PreferencesPort,
 )
-from ..models import AUDIO_EXTENSIONS, StartupLoad, Track, track_key
+from ..models import AUDIO_EXTENSIONS, LYRIC_EXTENSIONS, StartupLoad, Track, track_key
 
 __all__ = ["LibraryService", "apply_favorites", "filter_tracks"]
 
@@ -84,7 +84,7 @@ class LibraryService:
 
     def load_directory(self, directory: Path) -> list[Track]:
         """扫描目录**根层级**的音频文件（不递归子目录）。"""
-        index = self._lyrics.index(directory / "lyrics")
+        index = self._lyrics_index(directory)
         tracks: list[Track] = []
         try:
             entries = sorted(directory.iterdir())
@@ -96,12 +96,29 @@ class LibraryService:
             tracks.append(self._build(path, index))
         return tracks
 
+    def _lyrics_index(self, directory: Path) -> dict[str, Path]:
+        """歌词索引：``<目录>/lyrics`` 优先，其次是与音频同级的歌词文件。
+
+        界面提示写的是「把同名 .lrc 放在歌曲旁边」，那就得真的认同级文件——
+        「另建一个 lyrics 子目录」对只想听歌的人是多余的心智负担。两边同名时
+        以 ``lyrics/`` 里的为准（那是用户特意整理过的版本）。
+        """
+        index = dict(self._lyrics.index(directory / "lyrics"))
+        try:
+            entries = list(directory.iterdir())
+        except OSError:
+            return index
+        for path in entries:
+            if path.is_file() and path.suffix.lower() in LYRIC_EXTENSIONS:
+                index.setdefault(path.stem.lower(), path)
+        return index
+
     def create_track(self, path: Path) -> Track | None:
         """从单个音频文件创建曲目；格式不支持时返回 ``None``。"""
         resolved = path.resolve()
         if not resolved.is_file() or resolved.suffix.lower() not in AUDIO_EXTENSIONS:
             return None
-        index = self._lyrics.index(resolved.parent / "lyrics")
+        index = self._lyrics_index(resolved.parent)
         return self._build(resolved, index)
 
     def _build(self, path: Path, index: dict[str, Path]) -> Track:

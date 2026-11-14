@@ -10,9 +10,12 @@ name = "cs-music-player"
 version = "0.0.0"
 description = "CS Music Player - a layered (MVVM + DIP) local music player built with Flet"
 requires-python = ">=3.12"
-authors = [{name = "Your Name", email = "you@example.com"}]
+authors = [{ name = "Your Name", email = "you@example.com" }]
+# UI 走本地 cs-ui（包名 `ui`）：组件、设计令牌、主题运行时都由它提供。
+# 它不在 PyPI 上，按源码可编辑安装：pip install -e ../cs-ui
 dependencies = [
-    "flet>=1.0.4",
+    "cs-ui>=0.2",
+    "flet-desktop==1.1.2",
     "flet-audio>=1.0.4",
     "miniaudio>=1.71",
     "mutagen>=1.47",
@@ -20,9 +23,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "pytest>=8.0",
-]
+dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

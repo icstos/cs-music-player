@@ -7,12 +7,57 @@
 from __future__ import annotations
 
 import base64
+import re
 from pathlib import Path
 from typing import Any
 
 from ..models import AudioMetadata, TagText
 
-__all__ = ["MutagenMetadataReader"]
+__all__ = ["MutagenMetadataReader", "repair_mojibake"]
+
+#: 「GBK 字节被标成 LATIN1」时按这些编码往回试；gbk 最严格所以排最前。
+_MOJIBAKE_ENCODINGS = ("gbk", "gb18030", "big5")
+
+#: 连续两个以上高位字符才可能是乱码 —— 单个 ``ö`` / ``é`` 是正常西文。
+_HIGH_CHARS = re.compile(r"[\u0080-\u00ff]{2,}")
+
+#: 汉字 / 假名 / 全角标点都算「东亚字符」，用来判断重解码是否真的解出了文字。
+_EAST_ASIAN = re.compile(r"[\u2e80-\u9fff\uf900-\ufaff\uff00-\uffef]")
+
+
+def repair_mojibake(text: str) -> str:
+    """修复「GBK 字节被当成 latin-1 解码」的经典乱码。
+
+    大量中文 MP3 的 ID3v2 帧声明 ``encoding=LATIN1``，实际却塞的是 GBK
+    字节，mutagen 老老实实按 latin-1 解出 ``°àµÃÈð``。这里把字符串按
+    latin-1 还原成字节再按 GBK 重解一次。
+
+    为了不误伤真正的西文（``Björk``、``Café``），只在同时满足三条时才替换：
+
+    1. 串里存在**连续两个以上**高位字符（单个变音字母不算）；
+    2. 能按某种中文编码重解成功；
+    3. 重解后出现了比原文更多的东亚字符（说明确实还原出了汉字）。
+    """
+    if not text or text.isascii() or not _HIGH_CHARS.search(text):
+        return text
+    try:
+        raw = text.encode("latin-1")
+    except UnicodeEncodeError:
+        return text
+    try:
+        # 更常见的一种：UTF-8 字节被当 latin-1（``Ã©`` 其实是 ``é``）
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    before = len(_EAST_ASIAN.findall(text))
+    for encoding in _MOJIBAKE_ENCODINGS:
+        try:
+            fixed = raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        if len(_EAST_ASIAN.findall(fixed)) > before:
+            return fixed
+    return text
 
 
 def _open_audio(path: Path) -> tuple[Any, Any]:
@@ -49,7 +94,7 @@ def _tag_value(tags: Any, *keys: str) -> str:
             items = [str(value)]
         text = " / ".join(i.strip("[]' \u3000") for i in items if i)
         if text:
-            return text
+            return repair_mojibake(text)
     return ""
 
 
@@ -70,7 +115,7 @@ def _first_tag_value(tags: Any, *keys: str) -> str:
         for part in parts:
             text = str(part).strip()
             if text:
-                return text
+                return repair_mojibake(text)
     return ""
 
 

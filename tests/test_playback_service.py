@@ -46,14 +46,32 @@ def test_play_at_out_of_range_keeps_state_untouched() -> None:
     assert engine.loads == []
 
 
-def test_toggle_without_loaded_audio_is_a_noop() -> None:
-    """回归：导入列表但尚未选曲时 ``current`` 已是 0、引擎里却没有音频，
-    此时播放键在主界面处于禁用态，``toggle`` 不应凭空起播。"""
-    service, _, engine = make_service()
+def test_toggle_without_loaded_audio_starts_the_current_track() -> None:
+    """回归：导入列表但尚未起播时 ``current`` 已是 0、引擎里却没有音频。
 
+    旧实现在这个状态下走「暂停 / 继续」分支，对着空引擎调用 = 静默无反应，
+    表现就是「点播放按钮什么都不发生」。
+    """
+    service, observer, engine = make_service()
+
+    assert service.loaded is False
     asyncio.run(service.toggle())
 
-    assert engine.loads == []
+    assert engine.loads == [Path("0.mp3")]
+    assert service.loaded is True
+    assert observer.events[-1] == ("track", 0)
+
+
+def test_toggle_after_track_list_is_replaced_starts_again() -> None:
+    """换一整份列表后引擎里那份音频已经作废，``loaded`` 必须跟着复位。"""
+    service, _, engine = make_service()
+    asyncio.run(service.play_at(1))
+
+    service.set_tracks(make_tracks(2))
+    assert service.loaded is False
+
+    asyncio.run(service.toggle())
+    assert engine.loads == [Path("1.mp3"), Path("0.mp3")]
 
 
 def test_toggle_pauses_while_playing_and_resumes_afterwards() -> None:

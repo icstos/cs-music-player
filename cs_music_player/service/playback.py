@@ -122,6 +122,7 @@ class PlaybackService:
         self._observer = observer
         self._tracks: list[Track] = []
         self._current = -1
+        self._loaded = False
         self._mode = PlayMode.SEQUENCE
         self._volume = max(0.0, min(1.0, float(volume)))
         self._speed = float(speed)
@@ -159,10 +160,21 @@ class PlaybackService:
         """引擎当前是否在播放。"""
         return self._engine.playing
 
+    @property
+    def loaded(self) -> bool:
+        """引擎里是否真的装着曲目。
+
+        和 ``current >= 0`` 不是一回事：导入一份列表后 ``current`` 已经是 0
+        （用于高亮 / 展示），但一帧音频都还没装载。此时按播放键应该「起播」，
+        而不是对着空引擎调暂停 / 继续 —— 那是无声的空操作。
+        """
+        return self._loaded
+
     def set_tracks(self, tracks: list[Track]) -> None:
         """整体替换播放列表（不改变实际播放状态）。"""
         self._tracks = tracks
         self._current = -1 if not tracks else 0
+        self._loaded = False
 
     # —— 控制 —— #
 
@@ -175,13 +187,14 @@ class PlaybackService:
         self._observer.on_duration(track.duration)
         self._observer.on_position(0.0)
         await self._engine.load(track.path, autoplay=True)
+        self._loaded = True
         self._observer.on_track_change(index)
 
     async def toggle(self) -> None:
-        """播放 / 暂停切换；尚未选曲时从第一首开始。"""
-        if self._current < 0:
+        """播放 / 暂停切换；还没装载曲目时从当前曲目起播。"""
+        if not self._loaded:
             if self._tracks:
-                await self.play_at(0)
+                await self.play_at(max(self._current, 0))
             return
         await self._engine.set_paused(self._engine.playing)
 

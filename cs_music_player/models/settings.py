@@ -76,6 +76,56 @@ THEME_PREFERRED_MODE: dict[ColorTheme, ThemeMode] = {
     ColorTheme.MIDNIGHT: ThemeMode.DARK,
 }
 
+#: 配色 → 品牌色种子。
+#:
+#: **一条配色只声明一个色值**：明暗两套（46 个 M3 角色）由 cs-ui 的色板引擎
+#: 从这个种子解算 —— 主色的明度按对比度求，中性表面掺一点同色相，深色档位
+#: 单独排布。所以这里不再写「底色 / 描边 / 各种灰」，也不会出现某个配色忘了
+#: 深色版的情况。
+#:
+#: 取值沿用各配色原来的主色，保证「商务蓝还是那个蓝」。深色模式要换主色时，
+#: 引擎会把种子按暗底重新解明度（例如极简白的近黑主色在暗色下变成雾白）。
+THEME_SEEDS: dict[ColorTheme, str] = {
+    ColorTheme.BUSINESS_BLUE: "#2563eb",
+    ColorTheme.LAVENDER: "#7c5cf5",
+    ColorTheme.CORAL: "#e05445",
+    ColorTheme.MINT: "#0ba36b",
+    ColorTheme.VIVID_ORANGE: "#f2760c",
+    ColorTheme.TIFFANY: "#0da3a0",
+    ColorTheme.SAKURA: "#e0518c",
+    ColorTheme.MINIMAL_WHITE: "#18181b",
+    ColorTheme.PREMIUM_GRAY: "#475569",
+    ColorTheme.MIDNIGHT: "#1f2937",
+}
+
+#: 配色 → 显示名（选择面板与提示文案共用；顺序即枚举顺序）。
+THEME_NAMES: dict[ColorTheme, str] = {
+    ColorTheme.BUSINESS_BLUE: "商务蓝",
+    ColorTheme.LAVENDER: "薰衣草紫",
+    ColorTheme.CORAL: "珊瑚红",
+    ColorTheme.MINT: "薄荷绿",
+    ColorTheme.VIVID_ORANGE: "活力橙",
+    ColorTheme.TIFFANY: "蒂芙尼蓝",
+    ColorTheme.SAKURA: "樱花粉",
+    ColorTheme.MINIMAL_WHITE: "极简白",
+    ColorTheme.PREMIUM_GRAY: "高级灰",
+    ColorTheme.MIDNIGHT: "暗夜黑",
+}
+
+#: 首次启动的配色种子（供启动路径在读到持久化设置前先把窗口画对）。
+DEFAULT_THEME_SEED: str = THEME_SEEDS[DEFAULT_COLOR_THEME]
+
+
+def seed_of(theme: ColorTheme) -> str:
+    """取配色的品牌色种子；未知标识（例如旧版本存下的值）回退到默认配色。"""
+    return THEME_SEEDS.get(theme, DEFAULT_THEME_SEED)
+
+
+def name_of(theme: ColorTheme) -> str:
+    """取配色的显示名；未知标识同样回退到默认配色的名字。"""
+    return THEME_NAMES.get(theme, THEME_NAMES[DEFAULT_COLOR_THEME])
+
+
 
 @dataclass
 class DesktopLyricConfig:

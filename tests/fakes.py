@@ -132,13 +132,18 @@ class FakeEngine:
 
     async def load(self, path: Path, *, autoplay: bool = True) -> None:
         self.loads.append(path)
-        if autoplay:
-            self._playing = True
-            self.observer.on_play_state(True)
+        self._report(bool(autoplay))
 
     async def set_paused(self, paused: bool) -> None:
         self.pauses.append(paused)
-        self._playing = not paused
+        self._report(not paused)
+
+    def _report(self, playing: bool) -> None:
+        """与真引擎同样只在状态真的变化时上报，测试才能卡住「重复刷事件」。"""
+        if playing == self._playing:
+            return
+        self._playing = playing
+        self.observer.on_play_state(playing)
 
     async def seek(self, seconds: float) -> None:
         self.seeks.append(seconds)

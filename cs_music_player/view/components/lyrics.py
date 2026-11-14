@@ -1,8 +1,16 @@
-"""歌词面板与歌词行组件。"""
+"""歌词面板与歌词行。
+
+版式规则集中在四个纯函数里（``_lyric_*``），它们不碰控件，因此可以单测：
+
+- **普通行等高**（字号 × 2）—— 当前行上下两半行数相等，居中才精确；
+- 当前行放大一号（+3px），按内容自适应高度，最多两行，超出以 ``…`` 收尾；
+- 窗口行数恒取**奇数**，并为当前行可能折行预留余量；
+- 只渲染「当前行 ± 半屏」的窗口，因此首尾歌词也能停在区域中线上。
+"""
 
 from __future__ import annotations
 
-import flet as ft
+from ui import Container, Icons, Text, ft
 
 from ...models import (
     LYRIC_ACTIVE_DELTA,
@@ -11,12 +19,15 @@ from ...models import (
     LYRIC_ROW_GAP_RATIO,
     LyricLine,
 )
-from ..theme import palette
+from .. import tokens as t
 
 __all__ = ["LyricsLine", "LyricsPanel"]
 
+#: 歌词区左右留白：长句在窄窗口里也不贴边。
+LYRIC_PAD_X = 28
 
-# ── 歌词面板 ── #
+
+# ── 版式计算（纯函数） ── #
 
 
 def _lyric_active_font_size(font_size: float) -> float:
@@ -76,6 +87,9 @@ def _lyric_window(active: int, total: int, rows: int) -> list[int | None]:
     ]
 
 
+# ── 歌词行 ── #
+
+
 @ft.component
 def LyricsLine(
     text: str,
@@ -97,21 +111,25 @@ def LyricsLine(
         size = font_size
         pad = 0.0
         height, max_lines = row_height or None, 1
-    return ft.Container(
-        content=ft.Text(
+    return Container(
+        content=Text(
             text,
             size=size,
             weight=ft.FontWeight.W_700 if is_current else ft.FontWeight.NORMAL,
-            color=palette.PRIMARY if is_current else palette.TEXT_MUTED,
+            color=ft.Colors.PRIMARY if is_current else t.TEXT_SOFT,
             text_align=ft.TextAlign.CENTER,
             max_lines=max_lines,
             overflow=ft.TextOverflow.ELLIPSIS,
         ),
         height=height,
         alignment=ft.Alignment.CENTER,
-        padding=ft.Padding.symmetric(horizontal=28, vertical=pad),
+        padding=ft.Padding.symmetric(horizontal=LYRIC_PAD_X, vertical=pad),
+        # 换行时整行「长高」，200ms 的缓动让台阶变成滑行
         animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
     )
+
+
+# ── 面板 ── #
 
 
 @ft.component
@@ -144,32 +162,18 @@ def LyricsPanel(
     )
 
     if not has_lyrics_file:
-        body: ft.Control = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Icon(ft.Icons.SUBTITLES_OUTLINED, size=36, color=palette.TEXT_MUTED),
-                    ft.Text("暂无歌词", size=13, color=palette.TEXT_DIM),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=8,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            expand=True,
-            alignment=ft.Alignment.CENTER,
+        body: ft.Control = _placeholder(
+            Icons.SUBTITLES_OUTLINED, "暂无歌词", "将同名 .lrc 放在歌曲旁边即可显示"
         )
     elif not lines:
-        body = ft.Container(
-            content=ft.Text("歌词文件无法解析", size=13, color=palette.TEXT_DIM),
-            expand=True,
-            alignment=ft.Alignment.CENTER,
-        )
+        body = _placeholder(Icons.ERROR_OUTLINE, "歌词文件无法解析", "检查时间轴格式")
     else:
         body = ft.Column(
             controls=[
                 (
                     LyricsLine(lines[index].text, index == active, font_size, row_height)
                     if index is not None
-                    else ft.Container(height=row_height)
+                    else Container(height=row_height)
                 )
                 for index in window
             ],
@@ -184,9 +188,34 @@ def LyricsPanel(
         if abs(e.height - viewport_height) > 0.5:
             set_viewport_height(e.height)
 
-    return ft.Container(
+    return Container(
         content=body,
         expand=True,
+        # 行数按高度算，边缘那半行本该被裁掉 —— 硬裁比让它压到别的控件上好
         clip_behavior=ft.ClipBehavior.HARD_EDGE,
         on_size_change=on_size_change,
+    )
+
+
+def _placeholder(icon: ft.IconData, title: str, hint: str) -> ft.Control:
+    """空状态：图标 + 一句结论 + 一句怎么做。"""
+    return Container(
+        content=ft.Column(
+            [
+                ft.Icon(icon, size=36, color=t.TEXT_SOFT),
+                Text(title, size=14, weight=ft.FontWeight.W_600, color=t.TEXT_SOFT),
+                Text(
+                    hint,
+                    size=12,
+                    color=t.TEXT_SOFT,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=8,
+            alignment=ft.MainAxisAlignment.CENTER,
+            tight=True,
+        ),
+        expand=True,
+        alignment=ft.Alignment.CENTER,
     )

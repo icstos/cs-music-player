@@ -94,6 +94,37 @@ def test_load_directory_matches_sibling_lyrics_folder(tmp_path: Path) -> None:
     assert track.lyrics_path == lrc
 
 
+def test_load_directory_matches_a_lyric_file_beside_the_song(
+    tmp_path: Path,
+) -> None:
+    """界面提示承诺「同名 .lrc 放在歌曲旁边即可显示」，行为必须兑现。"""
+    folder = tmp_path / "music"
+    _write_songs(folder, ["a.mp3"])
+    lrc = folder / "a.lrc"
+    lrc.write_text("[00:01.00] hi", encoding="utf-8")
+    service = make_service()
+
+    (track,) = service.load_directory(folder)
+
+    assert track.lyrics_path == lrc
+
+
+def test_lyrics_folder_wins_over_a_sibling_file(tmp_path: Path) -> None:
+    """两处都有同名歌词时，以用户特意整理过的 ``lyrics/`` 为准。"""
+    folder = tmp_path / "music"
+    _write_songs(folder, ["a.mp3"])
+    (folder / "a.lrc").write_text("[00:01.00] beside", encoding="utf-8")
+    lyrics_dir = folder / "lyrics"
+    lyrics_dir.mkdir()
+    curated = lyrics_dir / "a.lrc"
+    curated.write_text("[00:01.00] curated", encoding="utf-8")
+    service = make_service(repository=FakeLyricsRepository({curated: []}))
+
+    (track,) = service.load_directory(folder)
+
+    assert track.lyrics_path == curated
+
+
 def test_load_directory_on_missing_folder_is_empty(tmp_path: Path) -> None:
     assert make_service().load_directory(tmp_path / "nope") == []
 

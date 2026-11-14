@@ -1,17 +1,17 @@
 # CS 音乐播放器
 
-基于 [Flet](https://flet.dev/) 构建的本地音乐播放器，面向 Windows 桌面端，提供简洁、流畅的听歌体验。
+基于 [Flet](https://flet.dev/) 与本地组件库 **cs-ui**（`import ui`）构建的本地音乐播放器，面向 Windows 桌面端，提供简洁、流畅的听歌体验。
 
 ## 功能特性
 
 - **本地音乐播放** — 通过文件夹导入，支持 MP3、WAV、OGG、FLAC、M4A、AAC
 - **播放控制** — 播放/暂停、上一曲/下一曲、进度拖拽、音量调节
 - **播放模式** — 顺序播放、单曲循环、随机播放
-- **歌词显示** — 自动匹配 `lyrics/` 子目录中的 `.lrc` / `.txt` 歌词，LRC 支持时间轴高亮，歌词按紧凑行距（字号 × 2）整屏铺开，当前播放行始终停在歌词区垂直中线上
+- **歌词显示** — 自动匹配同目录或 `lyrics/` 子目录中的 `.lrc` / `.txt` 歌词（同名 `.lrc` 放在歌曲旁边即可），LRC 支持时间轴高亮，歌词按紧凑行距（字号 × 2）整屏铺开，当前播放行始终停在歌词区垂直中线上
  （可见行数随歌词区尺寸与字号自适应）；歌词区右上角提供 **歌词同步** 与 **字体大小** 两个入口；播放时自动从 [LRCLIB](https://lrclib.net) 后台下载缺失歌词到 `lyrics/` 子目录
 - **专辑封面** — 从音频内嵌标签提取封面（基于 mutagen）
 - **收藏与搜索** — 收藏曲目持久化保存，支持按歌名、歌手、文件夹名搜索，可筛选仅显示收藏
-- **十套配色主题** — 商务蓝、薰衣草紫、珊瑚红、薄荷绿、活力橙、蒂芙尼蓝、樱花粉、极简白、高级灰、暗夜黑。工具栏调色板一键切换（点击即生效并持久化），配色与 **浅色 / 深色 / 跟随系统** 是两个正交维度，同一个悬浮菜单里同时给；每套配色只声明「主色 + 强调色」，其余令牌（底色、卡片、描边、文字灰阶、主色上的反色文字）统一推导，正文与按钮文字的对比度自动达标
+- **十套配色主题** — 商务蓝、薰衣草紫、珊瑚红、薄荷绿、活力橙、蒂芙尼蓝、樱花粉、极简白、高级灰、暗夜黑。工具栏调色板一键切换（点击即生效并持久化），配色与 **浅色 / 深色 / 跟随系统** 是两个正交维度，同一个悬浮菜单里同时给。每套配色只声明一个**主色种子**（`THEME_SEEDS`），其余 46 个 M3 角色由 cs-ui 的主题运行时解算（表面层级、容器、描边、前景灰阶、主色上的反色文字），主色按 WCAG 自动压明度、正文对比度 ≥ 4.5:1；原生窗口标题栏也跟随明暗切换
 - **最近文件夹历史** — 工具栏历史菜单记录最近打开的文件夹，悬停显示完整路径，支持一键**固定常用文件夹**置顶与**清空历史**，固定项独立持久化
 - **桌面歌词悬浮窗** — 独立于主窗口的原生悬浮窗，逐像素透明、可鼠标穿透锁定、可拖动、右键菜单、悬停工具条（详见下文）
 - **曲目信息悬浮提示** — 鼠标悬停列表项显示专辑、文件大小、采样率、码率、声道、格式等元数据
@@ -40,7 +40,7 @@ cd cs-music-player
 uv sync
 ```
 
-首次运行会依据 `pyproject.toml` + `uv.lock` 创建 `.venv` 并安装全部依赖（含 dev 测试依赖）。
+
 
 ### 3. 启动应用
 
@@ -68,18 +68,20 @@ uv run python main.py "D:\音乐\晴天.mp3"
 
 ## 音乐文件夹结构
 
-播放器扫描所选目录**根层级**的音频文件（不递归子目录）。歌词放在同级 `lyrics/` 文件夹中，按文件名（不含扩展名）自动匹配：
+播放器扫描所选目录**根层级**的音频文件（不递归子目录）。歌词按文件名（不含扩展名）自动匹配，两种放法都认：
 
 ```
 my-music/
 ├── song1.mp3
+├── song1.lrc          # ① 直接放在歌曲旁边
 ├── song2.flac
 └── lyrics/
-    ├── song1.lrc      # 与 song1.mp3 匹配
-    └── song2.txt      # 与 song2.flac 匹配
+    ├── song2.txt      # ② 收进 lyrics/ 子目录
+    └── song1.lrc      # 两处同名时以 lyrics/ 里的为准
 ```
 
 歌词文件支持 UTF-8 与 GBK 编码；`.lrc` 按时间轴解析，纯文本 `.txt` 则整段显示。
+标签里的乱码（GBK 字节被标成 LATIN1 的老式 MP3）会在读取时自动还原。
 
 ## 自动下载歌词
 
@@ -155,7 +157,7 @@ my-music/
 | infra | `cs_music_player/infra/` | 封装底层技术，对外只暴露 `infra/ports.py` 里的 `Protocol` | 标准库、flet / mutagen / Pillow、models |
 | service | `cs_music_player/service/` | 编排核心业务流程 | models、**仅** `infra.ports` |
 | viewmodel | `cs_music_player/viewmodel/` | 持有 UI 状态、暴露动作、连接 View 与 Service | models、service |
-| view | `cs_music_player/view/` | 纯 Flet 声明式渲染与事件分发，无业务逻辑 | models、viewmodel、flet |
+| view | `cs_music_player/view/` | 纯声明式渲染与事件分发，无业务逻辑 | models、viewmodel、**仅** `ui`（本地 cs-ui 组件库） |
 | （组装根） | `cs_music_player/bootstrap.py` | 唯一「认识所有层」的地方，负责 `new` 具体实现并注入 | 全部 |
 
 `main.py` 只负责窗口参数与显示时机，业务装配全部交给 `bootstrap.py`。
@@ -211,7 +213,7 @@ cs-music-player/
 │   ├── __init__.py               # 惰性转出的常用名字（Track / PlayMode …）
 │   ├── bootstrap.py              # 组装根：基础设施 → 服务 → 视图模型
 │   ├── models/                   # ① 模型层
-│   │   ├── constants.py          #    格式、字号/行距、速度、调色板、桌面歌词尺寸
+│   │   ├── constants.py          #    格式、字号/行距、速度、配色种子、桌面歌词尺寸
 │   │   ├── playback.py           #    PlayMode 枚举、PlaybackState
 │   │   ├── track.py              #    Track / AudioMetadata / StartupLoad
 │   │   ├── lyrics.py             #    LyricLine / LyricsDocument
@@ -240,7 +242,8 @@ cs-music-player/
 │   │   ├── ports.py              #    本层需要的抽象接口（依赖倒置的「接口」侧）
 │   │   └── app.py                #    AppViewModel：全部 UI 状态与动作
 │   └── view/                     # ⑤ 视图层
-│       ├── theme.py              #    可切换调色板 + Flet 主题
+│       ├── tokens.py             #    语义色角色（CANVAS / PANEL / TEXT / ACCENT …）→ M3 角色名
+│       ├── theme.py              #    配色种子 + 明暗 → cs-ui 主题运行时
 │       ├── app.py                #    根组件 PlayerApp（工具栏 + 装配）
 │       └── components/           #    纯 props 驱动的子组件
 ├── tests/                        # pytest 单元测试（含架构回归）
@@ -252,8 +255,9 @@ cs-music-player/
 
 | 依赖 | 用途 |
 |------|------|
-| [flet](https://flet.dev/) ≥ 1.0.4 | 声明式 UI 框架（`@ft.component`、`use_state`、`use_effect`） |
-| [flet-audio](https://pypi.org/project/flet-audio/) ≥ 1.0.4 | 音频播放 |
+| [flet](https://flet.dev/) ≥ 1.1.2 | 声明式 UI 运行时（`@ft.component`、`use_state`、`use_effect`） |
+| **cs-ui** ≥ 0.2 | 本地组件库（`import ui`）：布局 / 控件 / 设计令牌 / 主题运行时。视图层**只**依赖它，不直接 import flet |
+| [flet-audio](https://pypi.org/project/flet-audio/) ≥ 1.0.4 | 音频播放（由 `infra/audio.py` 封装成引擎，cs-ui 不再包含音频控件） |
 | [mutagen](https://pypi.org/project/mutagen/) ≥ 1.47 | 读取时长、标签（歌手/专辑）、采样率/码率、内嵌封面 |
 | [Pillow](https://python-pillow.org/) ≥ 10.0 | 桌面歌词悬浮窗的逐帧渲染 |
 | [pytest](https://docs.pytest.org/) ≥ 8.0 | 单元测试（dev 组） |
@@ -266,9 +270,10 @@ cs-music-player/
 uv run python -m pytest
 ```
 
-覆盖范围：播放模式与切歌策略、音量倍速边界、进度条边界、最近/固定文件夹、主题与字号持久化、
-歌词偏移、LRCLIB 匹配与标签解析、歌词版式（中线/行高/窗口）、桌面歌词渲染版式、
-睡眠定时器、视图模型端到端流程，以及**分层依赖约束**（AST 静态校验 + 子进程导入验证）。
+覆盖范围：播放模式与切歌策略、音量倍速边界、进度条边界、音频引擎的挂载/状态上报、
+最近/固定文件夹、主题与字号持久化、歌词偏移、LRCLIB 匹配与标签解析（含 GBK 乱码还原）、
+歌词版式（中线/行高/窗口）、桌面歌词渲染版式、睡眠定时器、视图模型端到端流程，
+以及**分层依赖约束**（AST 静态校验 + 子进程导入验证：视图层只许 import `ui`）。
 
 ### 冒烟测试
 
@@ -282,11 +287,33 @@ uv run python scripts/smoke_test.py
 
 ```python
 from cs_music_player import Track, PlayMode, ThemeMode
-from cs_music_player.models import SUPPORTED_FORMATS, MODE_SEQUENCE
-from cs_music_player.view import palette
+from cs_music_player.models import SUPPORTED_FORMATS, MODE_SEQUENCE, THEME_SEEDS
+from cs_music_player.view import tokens, theme_label
 ```
 
 包级导入是**惰性**的（PEP 562），`import cs_music_player` 本身几乎不花时间。
+
+### 颜色从哪里取
+
+视图层不再维护自己的调色板（旧的 `view/colors.py` 已删除）。颜色有两个来源：
+
+```python
+from ui import ft
+from cs_music_player.view import tokens as t
+
+# ① 语义角色：界面代码只认「这是画布/面板/正文/强调」，不认具体色值
+Container(bgcolor=t.PANEL, border=ft.Border.all(1, t.LINE))
+
+# ② M3 角色：需要主色系时直接用框架角色名，由 Flutter 在绘制时解析
+Text("正在播放", color=ft.Colors.ON_PRIMARY)
+Container(bgcolor=ft.Colors.PRIMARY, border_radius=999)
+```
+
+好处是**换主题时不需要重算任何颜色**：界面里存的是角色名，切主题只是把
+`page.theme` / `page.dark_theme` 两棵现成的树换上去。
+
+加一套配色 = 在 `models/settings.py` 的 `THEME_SEEDS` 里加一行主色种子（外加名字），
+其余 46 个角色自动解算。
 
 ### 输入框边框（flet 1.x）
 
@@ -301,16 +328,16 @@ ft.TextField(border=ft.OutlineInputBorder(border_radius=8))
 ft.TextField(
     border={
         ft.ControlState.DEFAULT: ft.OutlineInputBorder(
-            border_radius=12, side=ft.BorderSide(1, palette.BORDER)
+            border_radius=12, side=ft.BorderSide(1, t.LINE)
         ),
         ft.ControlState.FOCUSED: ft.OutlineInputBorder(
-            border_radius=12, side=ft.BorderSide(2, palette.PRIMARY_LIGHT)
+            border_radius=12, side=ft.BorderSide(2, ft.Colors.PRIMARY)
         ),
     }
 )
 ```
 
-边框对象在组件构建时创建，颜色需直接读 `palette.*`（不要提到模块级常量，否则暗色主题切换不会更新）。
+边框对象在组件构建时创建，颜色必须**内联**读角色名（不要提成模块级常量，否则暗色主题切换不会更新）。
 
 ### 启动优化（`main.py`）
 
