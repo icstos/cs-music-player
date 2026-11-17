@@ -25,6 +25,7 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
+from .._paths import assets_dir
 from ...models import (
     DESKTOP_LYRIC_FONT_DEFAULT as FONT_SIZE_DEFAULT,
 )
@@ -123,11 +124,9 @@ def resolve_font_path() -> str | None:
     if _font_path_override and Path(_font_path_override).is_file():
         return _font_path_override
 
-    here = Path(__file__).resolve().parent
     candidates = (
-        here.parent / "assets" / "fonts" / FONT_FILE_NAME,
+        assets_dir() / "fonts" / FONT_FILE_NAME,
         Path.cwd() / "assets" / "fonts" / FONT_FILE_NAME,
-        here / "assets" / "fonts" / FONT_FILE_NAME,
     )
     for candidate in candidates:
         if candidate.is_file():

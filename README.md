@@ -105,7 +105,7 @@ my-music/
 
 ### 行距与版式
 
-行距全部由字号推导（`cs_music_player/models/constants.py` 顶部三个常量），不写死像素：
+行距全部由字号推导（`src/cs_music_player/models/constants.py` 顶部三个常量），不写死像素：
 
 | 量 | 取值 | 说明 |
 | --- | --- | --- |
@@ -153,14 +153,21 @@ my-music/
 
 | 层 | 目录 | 职责 | 允许依赖 |
 | --- | --- | --- | --- |
-| models | `cs_music_player/models/` | 数据结构、状态枚举、常量。**无任何业务逻辑** | 仅标准库 |
-| infra | `cs_music_player/infra/` | 封装底层技术，对外只暴露 `infra/ports.py` 里的 `Protocol` | 标准库、flet / mutagen / Pillow、models |
-| service | `cs_music_player/service/` | 编排核心业务流程 | models、**仅** `infra.ports` |
-| viewmodel | `cs_music_player/viewmodel/` | 持有 UI 状态、暴露动作、连接 View 与 Service | models、service |
-| view | `cs_music_player/view/` | 纯声明式渲染与事件分发，无业务逻辑 | models、viewmodel、**仅** `ui`（本地 cs-ui 组件库） |
-| （组装根） | `cs_music_player/bootstrap.py` | 唯一「认识所有层」的地方，负责 `new` 具体实现并注入 | 全部 |
+源码采用 **src 布局**（`src/cs_music_player/`）：包不在仓库根，避免本地直接跑测试时
+误加载到源码而非已安装包，也让 `pip install -e .` / 打包隔离时不与同名目录冲突。
 
-`main.py` 只负责窗口参数与显示时机，业务装配全部交给 `bootstrap.py`。
+| 层 | 目录 | 职责 | 允许依赖 |
+| --- | --- | --- | --- |
+| models | `src/cs_music_player/models/` | 数据结构、状态枚举、常量。**无任何业务逻辑** | 仅标准库 |
+| infra | `src/cs_music_player/infra/` | 封装底层技术，对外只暴露 `infra/ports.py` 里的 `Protocol` | 标准库、flet / mutagen / Pillow、models |
+| service | `src/cs_music_player/service/` | 编排核心业务流程 | models、**仅** `infra.ports` |
+| viewmodel | `src/cs_music_player/viewmodel/` | 持有 UI 状态、暴露动作、连接 View 与 Service | models、service |
+| view | `src/cs_music_player/view/` | 纯声明式渲染与事件分发，无业务逻辑 | models、viewmodel、**仅** `ui`（本地 cs-ui 组件库） |
+| （组装根） | `src/cs_music_player/bootstrap.py` | 唯一「认识所有层」的地方，负责 `new` 具体实现并注入 | 全部 |
+
+`main.py` 只负责 src 路径引导、窗口参数与显示时机，业务装配全部交给 `bootstrap.py`。
+资源路径（如桌面歌词字体）统一从 `src/cs_music_player/infra/_paths.py` 的 `assets_dir()` 取，
+不在各处硬编码「向上数几层」。
 
 ### 声明式 UI：UI = f(状态)
 
@@ -206,46 +213,49 @@ my-music/
 
 ```
 cs-music-player/
-├── main.py                       # 程序入口：窗口参数、显示时机、预热钩子
-├── pyproject.toml                # 项目配置、运行/dev 依赖声明
+├── main.py                       # 程序入口：src 路径引导、窗口参数、显示时机、预热钩子
+├── pyproject.toml                # 项目配置、src 布局声明、运行/dev 依赖
 ├── uv.lock                       # uv 锁定依赖版本（提交到版本库）
-├── cs_music_player/
-│   ├── __init__.py               # 惰性转出的常用名字（Track / PlayMode …）
-│   ├── bootstrap.py              # 组装根：基础设施 → 服务 → 视图模型
-│   ├── models/                   # ① 模型层
-│   │   ├── constants.py          #    格式、字号/行距、速度、配色种子、桌面歌词尺寸
-│   │   ├── playback.py           #    PlayMode 枚举、PlaybackState
-│   │   ├── track.py              #    Track / AudioMetadata / StartupLoad
-│   │   ├── lyrics.py             #    LyricLine / LyricsDocument
-│   │   └── settings.py           #    ThemeMode、DesktopLyricConfig
-│   ├── infra/                    # ② 基础设施层
-│   │   ├── ports.py              #    对外抽象接口 + 持久化键名（零第三方依赖）
-│   │   ├── audio.py              #    flet-audio 引擎
-│   │   ├── metadata.py           #    mutagen 元数据 / 封面
-│   │   ├── lyrics_repository.py  #    本地歌词索引与 LRC 解析
-│   │   ├── lyrics_provider.py    #    LRCLIB 在线歌词
-│   │   ├── preferences.py        #    SharedPreferences 适配器
-│   │   ├── picker.py             #    目录选择框
-│   │   ├── dispatch.py           #    跨线程回调 → UI 事件循环
-│   │   ├── startup_args.py       #    命令行启动路径解析
-│   │   └── desktop_lyric/        #    Win32 分层窗口 + Pillow 渲染
-│   ├── service/                  # ③ 服务/业务层
-│   │   ├── playback.py           #    播放控制与切歌策略
-│   │   ├── library.py            #    目录选择/扫描、曲目构建、收藏
-│   │   ├── folders.py            #    最近打开与固定的文件夹历史
-│   │   ├── lyrics.py             #    歌词读取、按曲目偏移、后台补齐
-│   │   ├── settings.py           #    主题 / 字号 / 桌面歌词配置
-│   │   ├── desktop_lyric.py      #    悬浮窗编排
-│   │   └── sleep.py              #    睡眠倒计时
-│   ├── viewmodel/                # ④ 视图模型层
-│   │   ├── observable.py         #    极简观察者基类（零依赖）
-│   │   ├── ports.py              #    本层需要的抽象接口（依赖倒置的「接口」侧）
-│   │   └── app.py                #    AppViewModel：全部 UI 状态与动作
-│   └── view/                     # ⑤ 视图层
-│       ├── tokens.py             #    语义色角色（CANVAS / PANEL / TEXT / ACCENT …）→ M3 角色名
-│       ├── theme.py              #    配色种子 + 明暗 → cs-ui 主题运行时
-│       ├── app.py                #    根组件 PlayerApp（工具栏 + 装配）
-│       └── components/           #    纯 props 驱动的子组件
+├── assets/                       # 资源（字体、窗口图标）—— 留在仓库根
+├── src/
+│   └── cs_music_player/          # 顶层项目包（src 布局）
+│       ├── __init__.py           # 惰性转出的常用名字（Track / PlayMode …）
+│       ├── bootstrap.py          # 组装根：基础设施 → 服务 → 视图模型
+│       ├── models/               # ① 模型层
+│       │   ├── constants.py      #    格式、字号/行距、速度、配色种子、桌面歌词尺寸
+│       │   ├── playback.py       #    PlayMode 枚举、PlaybackState
+│       │   ├── track.py          #    Track / AudioMetadata / StartupLoad
+│       │   ├── lyrics.py         #    LyricLine / LyricsDocument
+│       │   └── settings.py       #    ThemeMode、DesktopLyricConfig
+│       ├── infra/                # ② 基础设施层
+│       │   ├── _paths.py         #    assets 目录唯一出口（src 布局资源定位）
+│       │   ├── ports.py          #    对外抽象接口 + 持久化键名（零第三方依赖）
+│       │   ├── audio.py          #    flet-audio 引擎
+│       │   ├── metadata.py       #    mutagen 元数据 / 封面
+│       │   ├── lyrics_repository.py  #  本地歌词索引与 LRC 解析
+│       │   ├── lyrics_provider.py    #  LRCLIB 在线歌词
+│       │   ├── preferences.py        #  SharedPreferences 适配器
+│       │   ├── picker.py             #  目录选择框
+│       │   ├── dispatch.py           #  跨线程回调 → UI 事件循环
+│       │   ├── startup_args.py       #  命令行启动路径解析
+│       │   └── desktop_lyric/        #  Win32 分层窗口 + Pillow 渲染
+│       ├── service/              # ③ 服务/业务层
+│       │   ├── playback.py       #    播放控制与切歌策略
+│       │   ├── library.py        #    目录选择/扫描、曲目构建、收藏
+│       │   ├── folders.py        #    最近打开与固定的文件夹历史
+│       │   ├── lyrics.py         #    歌词读取、按曲目偏移、后台补齐
+│       │   ├── settings.py       #    主题 / 字号 / 桌面歌词配置
+│       │   ├── desktop_lyric.py  #    悬浮窗编排
+│       │   └── sleep.py          #    睡眠倒计时
+│       ├── viewmodel/            # ④ 视图模型层
+│       │   ├── observable.py     #    极简观察者基类（零依赖）
+│       │   ├── ports.py          #    本层需要的抽象接口（依赖倒置的「接口」侧）
+│       │   └── app.py            #    AppViewModel：全部 UI 状态与动作
+│       └── view/                 # ⑤ 视图层
+│           ├── tokens.py         #    语义色角色（CANVAS / PANEL / TEXT / ACCENT …）→ M3 角色名
+│           ├── theme.py          #    配色种子 + 明暗 → cs-ui 主题运行时
+│           ├── app.py            #    根组件 PlayerApp（工具栏 + 装配）
+│           └── components/       #    纯 props 驱动的子组件
 ├── tests/                        # pytest 单元测试（含架构回归）
 └── scripts/
     └── smoke_test.py             # 元数据 / 收藏逻辑的冒烟测试

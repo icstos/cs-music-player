@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-PACKAGE = Path(__file__).resolve().parent.parent / "cs_music_player"
+PACKAGE = Path(__file__).resolve().parent.parent / "src" / "cs_music_player"
 PACKAGE_NAME = "cs_music_player"
 
 #: 组装根：唯一允许「认识所有层」的地方，不参与分层约束。

@@ -28,11 +28,22 @@ Python 侧本来在空转（主线程止于 ``await`` 客户端进程，GIL 是�
 from __future__ import annotations
 
 import asyncio
+import sys
 import threading
 from contextlib import suppress
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from cs_music_player.infra.startup_args import parse_startup_path
+# src 布局必需：隔离打包环境（serious_python / PyInstaller 等）不会执行
+# pip install -e .，包被编译到 <app>/src/cs_music_player/，而运行时 sys.path
+# 只有 <app>/ 根、不含 src。这段同时覆盖开发态与打包态，删掉即打包后
+# ModuleNotFoundError。用 __file__ 而非 cwd，因为打包后 cwd 不确定。
+_ROOT = Path(__file__).resolve().parent
+_SRC = _ROOT / "src"
+if str(_SRC) not in sys.path and (_SRC / "cs_music_player").exists():
+    sys.path.insert(0, str(_SRC))
+
+from cs_music_player.infra.startup_args import parse_startup_path  # noqa: E402
 
 if TYPE_CHECKING:  # 只为类型注解；运行期不导入 ui，启动路径保持最短
     from ui import ft
