@@ -1,7 +1,8 @@
-"""共享常量：文件格式、播放模式、速度、歌词版式、桌面歌词尺寸、本地字体。
+"""共享常量：文件格式、播放模式、速度、歌词版式、桌面歌词尺寸。
 
 配色也不在这里：每套配色只有一个「品牌色种子」，46 个界面角色由 cs-ui 的
 色板引擎从种子解算（见 :data:`~cs_music_player.models.THEME_SEEDS`）。
+字体也不在这里：正文字体族由 cs-ui 按运行平台选择（见 ``ui.core.fonts``）。
 本模块不依赖任何第三方库。
 """
 
@@ -33,9 +34,8 @@ LYRIC_FONT_DEFAULT: float = 15.0
 LYRIC_FONT_MIN: float = 11.0
 LYRIC_FONT_MAX: float = 24.0
 
-#: 字体自带的单行高度比例：一个 size 号的文本行占 size × LYRIC_LINE_FACTOR 高。
-#: 实测 AlibabaPuHuiTi（多行文本相邻行中心距 ÷ 字号 ≈ 1.40），与字体
-#: hhea 的 asc 1060 + desc 340 / upem 1000 = 1.4 一致。
+#: 单行文本的自然高度比例：一个 size 号的文本行按 size × LYRIC_LINE_FACTOR
+#: 计高。它是行距计算的布局约定（字族由 cs-ui 按平台选择，不绑定某一款字体）。
 LYRIC_LINE_FACTOR: float = 1.4
 
 #: 相邻两行歌词之间额外的呼吸空间，按字号比例给出。
@@ -66,7 +66,3 @@ DESKTOP_LYRIC_FONT_STEP: float = 2.0
 # ── 用户数据 ── #
 #: 最近打开文件夹最多保留几条。
 MAX_RECENT_FOLDERS: int = 8
-
-# ── 本地字体 ── #
-FONT_FAMILY: str = "Alibaba PuHuiTi"
-FONT_FAMILY_FILE: str = "/fonts/AlibabaPuHuiTi-3-55-Regular.otf"

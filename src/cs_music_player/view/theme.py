@@ -28,7 +28,6 @@ from collections.abc import Callable
 from ui import IconData, Icons, Page, apply_theme, theme_state
 
 from ..models import (
-    FONT_FAMILY,
     ColorTheme,
     PlayMode,
     ThemeMode,
@@ -103,7 +102,7 @@ def sync_theme(
     ``use_effect`` 依赖表），不要每帧都调。
     """
     state = theme_state()
-    state.font_family = FONT_FAMILY
+    # 字体族不在这里设：交给 cs-ui 按平台选系统字体（font_family 保持 None）。
     state.set_primary(seed_of(color))
     state.set_mode(str(mode))
     apply_theme(page, state, on_brightness=on_brightness)

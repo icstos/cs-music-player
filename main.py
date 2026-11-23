@@ -71,10 +71,10 @@ def prewarm() -> None:
     from ui import build_theme, theme_state
 
     from cs_music_player.bootstrap import build_view_model  # noqa: F401  预热导入
-    from cs_music_player.models import FONT_FAMILY
 
     state = theme_state()
-    state.font_family = FONT_FAMILY
+    # 字体族交给 cs-ui：font_family 保持 None，按运行平台选系统字体
+    # （见 ui.core.fonts）。不再注册自带的 OTF 文件。
     state.set_primary(_initial_seed())
     build_theme(state, "light")
     build_theme(state, "dark")
@@ -135,17 +135,16 @@ def configure_window(page: ft.Page) -> None:
         # 否则它会算进「注册补丁晚发」的时间里。
         prewarm()
 
-    from ui import build_theme, ft, theme_state
-
-    from cs_music_player.models import FONT_FAMILY, FONT_FAMILY_FILE
+    from ui import apply_fonts, build_theme, ft, theme_state
 
     state = theme_state()
-    state.font_family = FONT_FAMILY
+    # 字体族交给 cs-ui：不设 font_family、不注册字体文件。apply_fonts 只记录
+    # 当前平台（让首帧主题树就选中系统字体），不像 apply_theme 那样绑亮度监听。
+    apply_fonts(page)
     state.set_primary(_initial_seed())
     state.set_mode("light")
 
     page.title = "CS 音乐播放器"
-    page.fonts = {FONT_FAMILY: FONT_FAMILY_FILE}
     page.theme_mode = ft.ThemeMode.LIGHT
     page.theme = build_theme(state, "light")
     page.dark_theme = build_theme(state, "dark")

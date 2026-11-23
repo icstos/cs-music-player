@@ -2,8 +2,8 @@
 
 桌面歌词窗是一个 **Win32 分层窗口**（``WS_EX_LAYERED`` +
 ``UpdateLayeredWindow``），它要求每帧提供一张「每像素 alpha」的位图。用 Pillow
-画这张图比用 GDI 画省事得多：能直接拿到高斯模糊做柔和投影、能直接读本地字体
-文件（``assets/fonts`` 里的 AlibabaPuHuiTi），还能顺手得到每个按钮的命中矩形。
+画这张图比用 GDI 画省事得多：能直接拿到高斯模糊做柔和投影、能按文件名加载
+系统字体（无需随包分发字体文件），还能顺手得到每个按钮的命中矩形。
 
 本模块**只负责画**，不碰任何 Win32，因此可以在任意平台上单测。窗口那一侧的
 事情（建窗、消息循环、鼠标穿透）在 :mod:`cs_music_player.infra.desktop_lyric.window`。
@@ -20,12 +20,11 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
-
-from .._paths import assets_dir
 from ...models import (
     DESKTOP_LYRIC_FONT_DEFAULT as FONT_SIZE_DEFAULT,
 )
@@ -79,8 +78,6 @@ SUPERSAMPLE = 3
 #: 取景框最小宽度（逻辑像素）：保证工具条在任何歌词长度下都放得下。
 MIN_WIDTH = 260.0
 
-FONT_FILE_NAME = "AlibabaPuHuiTi-3-55-Regular.otf"
-
 #: 底部工具条的按钮排布；``"sep"`` 是纯视觉分隔符，不参与命中。
 BUTTON_SPECS: tuple[tuple[str, float], ...] = (
     ("prev", TOOLBAR_BUTTON_WIDTH),
@@ -105,7 +102,34 @@ ICON_DISABLED_COLOR = (233, 239, 247, 96)
 ICON_HOVER_COLOR = (255, 255, 255, 255)
 BUTTON_HOVER_BG = (255, 255, 255, 38)
 
+#: 各平台系统字体候选，按优先级排列。桌面歌词是 Pillow 直接画位图，
+#: 不经过 Flutter 的主题字体栈，所以要自己挑一款能显示中文的系统字体。
+#: Windows 用微软雅黑（与 cs-ui 正文字体的中文回退一致）；Pillow 在 Windows
+#: 会按文件名搜索系统字体目录，实测 ``msyh.ttc`` 可直接打开。
+_SYSTEM_FONT_CANDIDATES: dict[str, tuple[str, ...]] = {
+    "win32": (
+        "msyh.ttc",  # 微软雅黑 Regular
+        "msyhbd.ttc",  # 微软雅黑 Bold
+        "simhei.ttf",  # 黑体
+        "simsun.ttc",  # 宋体
+    ),
+    "darwin": (
+        "/System/Library/Fonts/PingFang.ttc",  # 苹方
+        "/System/Library/Fonts/STHeiti Medium.ttc",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    ),
+}
+
+#: 其他平台（Linux 等）的通用候选：优先带 CJK 字形的字体。
+_GENERIC_FONT_CANDIDATES: tuple[str, ...] = (
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "NotoSansCJK-Regular.ttc",
+    "DejaVuSans.ttf",
+)
+
 _font_path_override: str | None = None
+_resolved_system_font: str | None | bool = False  # False = 尚未探测
 _font_cache: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
 
 
@@ -113,25 +137,43 @@ _font_cache: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
 
 
 def set_font_path(path: str | Path | None) -> None:
-    """显式指定字体文件（打包后资源目录与源码目录不同，需要外部告知）。"""
-    global _font_path_override
+    """显式指定字体文件（覆盖系统字体探测；一般无需调用）。"""
+    global _font_path_override, _resolved_system_font
     _font_path_override = str(path) if path else None
+    _resolved_system_font = False  # 解除覆盖时也要重新探测
     _font_cache.clear()
 
 
 def resolve_font_path() -> str | None:
-    """定位歌词字体：优先显式指定，其次仓库内 ``assets/fonts``。"""
-    if _font_path_override and Path(_font_path_override).is_file():
+    """定位歌词字体：优先显式指定，否则按平台选一款可加载的系统字体。
+
+    系统字体由操作系统提供，无需随应用分发字体文件。探测结果缓存，避免每帧
+    重复尝试；全都不行时返回 ``None``，交给 Pillow 的默认字体。
+    """
+    if _font_path_override:
         return _font_path_override
 
-    candidates = (
-        assets_dir() / "fonts" / FONT_FILE_NAME,
-        Path.cwd() / "assets" / "fonts" / FONT_FILE_NAME,
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            return str(candidate)
-    return None
+    global _resolved_system_font
+    if _resolved_system_font is not False:
+        return _resolved_system_font
+
+    candidates = _SYSTEM_FONT_CANDIDATES.get(sys.platform, _GENERIC_FONT_CANDIDATES)
+    found: str | None = None
+    for name in candidates:
+        if Path(name).is_file() or _can_open_font(name):
+            found = name
+            break
+    _resolved_system_font = found
+    return found
+
+
+def _can_open_font(name: str) -> bool:
+    """判断 ``name`` 是否为 Pillow 能按系统字体名打开的字体（如 ``msyh.ttc``）。"""
+    try:
+        ImageFont.truetype(name, 12)
+    except OSError:
+        return False
+    return True
 
 
 def load_font(px: int) -> ImageFont.FreeTypeFont:
